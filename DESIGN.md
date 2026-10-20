@@ -106,7 +106,8 @@ Everything discussed and agreed on for the cozy plant shop game. Living doc.
 1. 71-species content audit ✅ (seed JSON still to author: care, light tier, water, traits, growth)
 2. Scaffold (Expo + Skia) ✅ — this folder, one-room GPGP layout
 3. Customer loop (in progress): counter + customer + dialogue/patience + drag-to-serve + coins
-- **Tend (4a, built 2026-10-19):** water meter per plant (~60s drain) + 3 growth stages (sprout/growing/mature, ~25s/stage, only when watered). Tap plant = water (blue droplet burst). "!" attention marker when thirsty — unified system; trim (bad shape) and repot (outgrew pot) plug in later, parked for now (trim needs a distinct purpose; repot belongs with the pot economy in Step 7). Sell anytime: price scales with maturity (30%/60%/100%) — no mature-gate; selling babies at a loss emerges once buy prices exist (4b).
+- **Tend (4a, built 2026-10-19):** water meter per plant (~60s drain) + 3 growth stages (sprout/growing/mature, ~25s/stage, only when watered). Tap plant = water (blue droplet burst). "!" attention marker: thirsty → water, root-bound → repot. Sell anytime: price scales with maturity (30%/60%/100%) — no mature-gate; selling babies at a loss emerges once buy prices exist (4b).
+- **Repot & pot sizes (4c, designed 2026-10-19, not built):** repot IS the stage-up (growth meter fills → root-bound "!" → repot to next size advances the stage); sizes 2"/4"/6" × tiers (Nursery/Terracotta/Ceramic/Designer); old pots return to a reusable stash; sale carries the current pot's bonus. Sequences after sprites land and the loop tests clean.
 5. Zone gameplay (light tiers matter)
 6. City + seasons
 7. Chore fixes (self-watering pots, watering system, grow lights)
@@ -122,8 +123,11 @@ V1 excludes: cultivar-level scanning, shop relocation, social, story.
 - **Phases:** CLOSED = buy / plant / move / water, no customers. OPEN = 20 customers/day, serve (drag) + water only, no management. Time (growth/water) runs in both. Day ends after 20 with a summary; "Close" early anytime.
 - Tap (closed): empty slot = place modal (inventory + pot choice); occupied slot = manage modal (info + water + move grid). Tap (open): thirsty plant = water; otherwise nothing.
 - Drag plant → customer = serve. Drag elsewhere = spring back. Drag is phase-aware: CLOSED = drag to slot moves/swaps; OPEN = drag to customer serves.
-- "!" marker = plant needs attention (currently: thirsty → water; later: trim, repot).
-- **Pots:** chosen at placement, go with the plant on sale. Nursery free/+0%, Terracotta 3/+20%, Ceramic 8/+50%, Designer 15/+100%. Bonus multiplies sale price — better ROI on expensive plants. Color-coded per tier.
+- "!" marker = plant needs attention: thirsty → water; **root-bound → repot** (the two jobs the marker was designed for).
+- **Pots are two-dimensional: size × tier.** Size = 2" / 4" / 6", tier = Nursery / Terracotta / Ceramic / Designer. UI shows both plainly ("Terracotta 4in").
+- **Repot IS the stage-up.** Sprout in a 2" pot → growth meter fills → plant goes root-bound ("!"), growth pauses → repot to 4" = becomes "growing". Meter fills again → repot to 6" = "mature". No punishment timer, no death — the plant waits for you (the time gate is the growth meter, not a countdown).
+- **Pot stash.** Repotting frees the old pot into a reusable stash; new sprouts go into stashed pots free. Buy a pot only when the stash is empty. On sale, the current pot leaves with the plant and its bonus applies.
+- Economy note: repots are now mandatory costs, so mature sale prices need headroom — re-run the numbers at build time. Size can carry part of the price bonus (a 6" plant is visibly a bigger product than a 2" one).
 - Sell anytime: price = sell_price × request_grade × maturity (30%/60%/100%) × (1 + pot bonus). No mature-gate; selling babies at a loss emerges from buy prices.
 - Customers at the checkout counter (coffee-shop style): dialogue card + patience bar.
   Specific requests: wrong species = refuse (no sale, snap back, patience drains).

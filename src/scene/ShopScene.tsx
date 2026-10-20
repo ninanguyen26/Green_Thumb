@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View, Text, TouchableOpacity, useWindowDimensions } from "react-native";
-import { Canvas, Rect, RoundedRect } from "@shopify/react-native-skia";
+import { Canvas, Image as SkImage, useImage } from "@shopify/react-native-skia";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import {
   Easing,
@@ -11,7 +11,7 @@ import {
   runOnJS,
   type SharedValue,
 } from "react-native-reanimated";
-import { WALL_SECTIONS, buildSlots, layout } from "./zones";
+import { buildSlots, layout } from "./zones";
 import { PotSprite, type PotData } from "./PotSprite";
 import { ParticleLayer, spawnBurst, type Particle } from "./Particles";
 import { CustomerSprite } from "./CustomerSprite";
@@ -70,6 +70,7 @@ export function ShopScene() {
   const { width: W, height: H } = useWindowDimensions();
   const L = layout(W, H);
   const slots = buildSlots(W, H);
+  const bg = useImage(require("../../assets/background/background.png"));
 
   const clock = useSharedValue(0);
   const dragId = useSharedValue<string | null>(null);
@@ -127,6 +128,7 @@ export function ShopScene() {
   const timeouts = useRef<number[]>([]);
   const custCount = useRef(0);
   const dayStats = useRef({ coins: 0, happy: 0, angry: 0 });
+  const resolvedRef = useRef(false); // customer already served/timed out? blocks double-sale race
   useEffect(() => () => {
     timeouts.current.forEach(clearTimeout);
   }, []);
@@ -168,6 +170,7 @@ export function ShopScene() {
     }
     const req = makeRequest(ids);
     customerSv.value = req;
+    resolvedRef.current = false;
     setCustomer({
       id: Date.now(),
       custId: 1 + Math.floor(Math.random() * CUSTOMER_COUNT),
@@ -221,12 +224,18 @@ export function ShopScene() {
   }
 
   function handleTimeout() {
+    if (resolvedRef.current) return;
+    resolvedRef.current = true;
+    customerSv.value = null; // close the serve gate immediately
     dayStats.current.angry += 1;
     setCustomer((c) => (c ? { ...c, mood: "angry", note: "Never mind, I'm leaving." } : c));
     leaveAndNext();
   }
 
   function handleSale(plantId: string, stars: number, price: number) {
+    if (resolvedRef.current) return; // this customer was already served (double-drop race)
+    resolvedRef.current = true;
+    customerSv.value = null; // close the serve gate NOW, not after the leave delay
     setCoins((c) => c + price);
     dayStats.current.coins += price;
     dayStats.current.happy += 1;
@@ -375,11 +384,57 @@ export function ShopScene() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer?.id, customer?.mood]);
 
-  // Drag to serve (open only, via customer presence). Tap: phase-aware slot actions.
-  const gesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .onBegin((e) => {
+  // Tap = water/manage (dedicated Tap gesture, reliable). Pan = drag to move/serve.
+  const gesture = useMemo(() => {
+    const tap = Gesture.Tap()
+      .maxDuration(500)
+      .maxDistance(24)
+      .onEnd((e) => {
+        // hit-test the PLANT's visible bounds — foliage sits ~100px above
+        // the pot, so a slot-point test misses leaf taps.
+        let hitId: string | null = null;
+        let hitD = Infinity;
+        for (const id in pots.value) {
+          const p = pots.value[id];
+          if (e.x > p.wx - 85 && e.x < p.wx + 85 && e.y > p.wy - 200 && e.y < p.wy + 50) {
+            const dx = e.x - p.wx;
+            const dy = e.y - (p.wy - 90);
+            const d = dx * dx + dy * dy;
+            if (d < hitD) {
+              hitD = d;
+              hitId = id;
+            }
+          }
+        }
+        spawnBurst(parts, clock.value, e.x, e.y, "#d9ecff"); // tap landed here
+        if (hitId) {
+          const pd = pots.value[hitId];
+          if (phaseSv.value === "open" || pd.water < 0.35) {
+            spawnBurst(parts, clock.value, e.x, e.y, "#7fc8f2");
+            runOnJS(handleWater)(hitId);
+          } else if (phaseSv.value === "closed") {
+            runOnJS(openSlotModal)(pd.slot); // closed + happy plant = manage
+          }
+        } else if (phaseSv.value === "closed") {
+          // no plant hit: nearest slot (empty = place modal)
+          let best = -1;
+          let bestD = HIT_R * HIT_R;
+          for (let i = 0; i < slots.length; i++) {
+            const dx = e.x - slots[i].x;
+            const dy = e.y - slots[i].y;
+            const d = dx * dx + dy * dy;
+            if (d < bestD) {
+              bestD = d;
+              best = i;
+            }
+          }
+          if (best >= 0) runOnJS(openSlotModal)(best);
+        }
+      });
+
+    const pan = Gesture.Pan()
+      .minDistance(24)
+      .onBegin((e) => {
           const ps = pots.value;
           for (const id in ps) {
             const dx = e.x - ps[id].wx;
@@ -405,39 +460,6 @@ export function ShopScene() {
         })
         .onEnd((e) => {
           const did = dragId.value;
-          const moved = Math.abs(e.translationX) + Math.abs(e.translationY) > 12;
-          if (!moved) {
-            // TAP: nearest slot; closed = manage, open = water thirsty only
-            let best = -1;
-            let bestD = HIT_R * HIT_R;
-            for (let i = 0; i < slots.length; i++) {
-              const dx = e.x - slots[i].x;
-              const dy = e.y - slots[i].y;
-              const d = dx * dx + dy * dy;
-              if (d < bestD) {
-                bestD = d;
-                best = i;
-              }
-            }
-            if (best >= 0) {
-              if (phaseSv.value === "closed") {
-                runOnJS(openSlotModal)(best);
-              } else {
-                const pid = potIdInSlot(pots.value, best);
-                if (pid && pots.value[pid].water < 0.35) {
-                  spawnBurst(parts, clock.value, e.x, e.y - 60, "#7fc8f2");
-                  runOnJS(handleWater)(pid);
-                }
-              }
-            }
-            if (did) {
-              dragDX.value = withSpring(0, SPRING);
-              dragDY.value = withSpring(0, SPRING);
-              dragScale.value = withSpring(1, SPRING);
-              dragId.value = null;
-            }
-            return;
-          }
           if (!did) return;
           const p = pots.value[did];
           if (!p) {
@@ -515,10 +537,11 @@ export function ShopScene() {
             dragDY.value = withSpring(0, SPRING);
           }
           dragId.value = null;
-        }),
+        });
+
+    return Gesture.Race(tap, pan);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
+  }, []);
 
   const pipColor = patience > 0.5 ? "#4caf50" : patience > 0.25 ? "#ffb300" : "#e53935";
   const potBySlot: Record<number, string> = {};
@@ -535,30 +558,7 @@ export function ShopScene() {
       <GestureDetector gesture={gesture}>
         <View style={styles.fill}>
           <Canvas style={styles.fill}>
-            <Rect x={0} y={L.wallBottom} width={W} height={H - L.wallBottom} color="#9a7a5c" />
-            {WALL_SECTIONS.map((s) => (
-              <Rect
-                key={s.name}
-                x={W * s.x0}
-                y={0}
-                width={W * (s.x1 - s.x0)}
-                height={L.wallBottom}
-                color={s.color}
-              />
-            ))}
-            <Rect x={W * 0.3 + 18} y={H * 0.08} width={W * 0.4 - 36} height={H * 0.28} color="#cfe8f2" />
-            <Rect
-              x={W * 0.3 + 18}
-              y={H * 0.08}
-              width={(W * 0.4 - 36) * 0.3}
-              height={H * 0.28}
-              color="#ffffff"
-              opacity={0.25}
-            />
-            <Rect x={W * 0.5 - 4} y={H * 0.08} width={8} height={H * 0.28} color="#8a9aa5" />
-            <Rect x={W * 0.03} y={L.shelfY + 42} width={W * 0.24} height={12} color="#5d3f27" />
-            <Rect x={W * 0.32} y={L.shelfY + 42} width={W * 0.36} height={12} color="#5d7a8a" />
-            <Rect x={W * 0.73} y={L.shelfY + 42} width={W * 0.24} height={12} color="#4a3520" />
+            <SkImage image={bg} x={0} y={0} width={W} height={H} fit="cover" />
             {customer && (
               <CustomerSprite
                 custId={customer.custId}
@@ -567,41 +567,6 @@ export function ShopScene() {
                 headY={L.customerHeadY}
               />
             )}
-            <RoundedRect
-              x={-10}
-              y={L.counterTop - H * 0.022}
-              width={W + 20}
-              height={H * 0.05}
-              r={8}
-              color="#b07a4a"
-            />
-            <Rect x={0} y={L.counterTop + H * 0.028} width={W} height={H - L.counterTop} color="#8a5a34" />
-            {Array.from({ length: 9 }).map((_, i) => (
-              <Rect
-                key={i}
-                x={((i + 1) * W) / 10 - 1}
-                y={L.counterTop + H * 0.035}
-                width={2}
-                height={H * 0.2}
-                color="#6e4527"
-                opacity={0.6}
-              />
-            ))}
-            <RoundedRect
-              x={W * 0.865}
-              y={L.counterTop - H * 0.085}
-              width={W * 0.065}
-              height={H * 0.062}
-              r={5}
-              color="#3e3a36"
-            />
-            <Rect
-              x={W * 0.873}
-              y={L.counterTop - H * 0.078}
-              width={W * 0.049}
-              height={H * 0.028}
-              color="#9fd8ff"
-            />
             {Object.keys(pots.value).map((id) => (
               <PotSprite
                 key={id}
@@ -619,7 +584,7 @@ export function ShopScene() {
 
           {/* dialogue bubble */}
           {customer && (
-            <View pointerEvents="none" style={[styles.bubble, { top: H * 0.1, width: W * 0.46 }]}>
+            <View pointerEvents="none" style={[styles.bubble, { top: H * 0.08, left: W * 0.04, width: W * 0.46 }]}>
               <Text style={styles.bubbleText}>{customer.note ?? requestText(customer.request)}</Text>
               {customer.mood === "waiting" && (
                 <View style={styles.pips}>

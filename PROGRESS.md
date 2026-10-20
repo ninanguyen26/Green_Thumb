@@ -20,6 +20,7 @@ Living build log. Updated as steps land.
   - [x] 4a Tend: water meter (drains ~60s) + growth stages (sprout/growing/mature, ~25s/stage, only when watered); tap plant = water (blue droplets); "!" attention marker (thirsty only for now — trim/repot plug in later); sell anytime with maturity scaling (sprout 30% / growing 60% / mature 100%)
   - [x] 4b Stock: supplier modal (buy 10–18 coins) + inventory; tap empty slot = place modal (choose pot tier); tap occupied slot = manage modal (info + water + move grid); pot tiers (Nursery free/+0%, Terracotta 3/+20%, Ceramic 8/+50%, Designer 15/+100%) chosen at placement, color-coded, bonus multiplies sale price; sold plants leave empty slots (no auto-restock)
   - [x] Open/Close days: start closed; "Open Shop" → 20 customers/day, serve + water only (no management); auto-close after 20 with day summary; "Close" early anytime; day counter; time (growth/water) runs in both phases
+- [ ] **Step 4c — Repot & pot sizes (designed, not built).** Repot = stage-up (root-bound "!" → repot to 2"/4"/6"); pot stash (old pots reused free); size × tier pricing; economy pass (mandatory repot costs vs mature sale prices). Build after sprites land + loop tests.
 - [ ] **Step 5 — Zone gameplay.** Light tiers matter per zone (sun icons, droop-before-death).
 - [ ] **Step 6 — City + seasons.** Pick city → seasonal clock on the glass wall.
 - [ ] **Step 7 — Chore fixes.** Self-watering pots, shop-wide watering system, grow lights.
@@ -36,9 +37,11 @@ V1 excludes: cultivar-level scanning, shop relocation, social, story.
 - **Request types:** (a) specific plant(s); (b) requirements → player suggests → graded 1–3 stars by **deterministic trait overlap** (no embeddings/NLP — both sides are structured data).
 - **Interactions:** tap plant = water (if thirsty) else slot modal; tap slot = manage modal (swap/place); drag plant → customer = serve; drag elsewhere = spring back. No free drag-to-rearrange.
 - **Refuse** (wrong species for a specific request) = no sale, no coins; plant snaps back; patience keeps draining. The clock is the penalty.
+- **Repot & pot sizes (designed 2026-10-19, Ngoc's proposal + Muse refinement):** growth stages map to pot sizes 2"→4"→6"; the repot IS the stage-up (growth meter fills → root-bound, "!" shows, growth pauses → repot to next size advances the stage). No punishment timer, no death — the plant waits. Pots are two-dimensional (size × tier, shown as e.g. "Terracotta 4in"). Repotting frees the old pot into a reusable stash; new sprouts use stashed pots free; buy only when the stash is empty. On sale, the current pot leaves with the plant + bonus. Economy to re-balance at build time (repots are mandatory costs; size can carry part of the price bonus).
 - **Patience** varies per customer (values tbd).
 - **Grading** is explainable (✓/✗ per requirement), offline, tunable.
 
 ## Changelog
 
+- **2026-10-19** — Customer sprites wired: 41 customers × 3 moods (happy/neutral/upset) from `assets/customers`, random per spawn, mood swaps on serve/timeout (preloaded, instant). Repot & pot-size system designed (repot = stage-up, pot stash, size × tier) — documented in DESIGN.md, queued as Step 4c.
 - **2026-10-19** — Scaffold runs on device. Fixed: `useAnimatedStyle` handle must go to `Animated.View` (was crashing); Skia `Ellipse` export broken in this install (leaves = `Circle` for now); stale Metro bundle mimicked a particle bug. Layout pivoted from pan-between-zones to GPGP one-room (Ngoc's call). Slot system: snap + swap-on-occupied + spring-back; sparkle only on the player's drop. Design locked: counter customers, tap/slot-modal/drag-serve model, deterministic grading.

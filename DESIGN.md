@@ -54,23 +54,38 @@ Everything discussed and agreed on for the cozy plant shop game. Living doc.
 - Training sources must be license-clean: Wikimedia Commons, Flickr CC API,
   GBIF. **No random Google-Images scraping for commercial training data.**
 
-## Scanner design (V1 scope)
+## Scanner design — simplified two-case pipeline (2026-10-20)
 
-### What V1 does — two paths, nothing else
-1. **Plant scan → classifier → top-3 confirm → species unlock.**
-   Unlocks the species (standard form), an almanac entry, and a
-   "wild specimen" tag. Never unlocks cultivars.
-2. **Tag scan → OCR → cultivar unlock.** At stores, scan plant + tag as one
-   ritual. OCR (Apple Vision, on-device) is high-trust: unlocks the cultivar
-   and the pair enters the training set.
+1. **Plant + plant tag → straightforward.** At stores, scan plant + tag as
+   one ritual. OCR (Apple Vision, on-device) reads the nursery tag: a
+   high-trust unlock of the cultivar, and the photo pair enters the
+   training set.
+2. **Plant with no tag → the user names it.** If the classifier is
+   confident, it **pre-fills the name field** — the camera does the work,
+   the user just confirms or edits. Otherwise the user types a name. The
+   app compares it against the database. If it matches **and the user confirms**
+   (shown the matched species with reference photos — "is this your
+   plant?"), they **claim** it: species unlock, almanac entry, and a
+   "wild specimen" tag. No match, or no confirm → the user can **send a
+   request** (name + photo into a suggestion/identification queue for human
+   curator review; unlocks nothing, touches no training data).
+   - **One visual plant = one claim.** A plant can only be used to claim
+     once — scanning the same plant again for a different species won't
+     work. "Same plant" is visual similarity, intentionally fuzzy: two
+     cuttings from the same mother read as the same plant, and that's the
+     point, not a bug. A second identical pothos was never going to unlock
+     anything new anyway; the rule only bites when one plant is spent on
+     two different names.
+   - The no-tag path never unlocks cultivars (the camera sees species, not
+     pink).
 
 ### Cultivar discovery (Pink Princess example)
 - Tag scan at a store (intended real-world path).
 - In-game **variegation discovery**: your *P. erubescens* grows a pink leaf.
 - Rare, expensive supplier stock (currency-sink escape valve).
-- NOT via classifier alone (it sees *erubescens*, not pink).
-- NOT via manual typing (personal label only — otherwise typing
-  "marble queen" on a golden pothos would grant a Marble Queen).
+- NOT via the no-tag path: typing "marble queen" on a golden pothos grants
+  nothing. The guard is the DB compare + user confirm + one-claim-per-plant
+  rule, not a vision judgment.
 
 ### Scanner/shop decoupling
 - Scanner classifies **species only, never genus**. *P. hederaceum*,
@@ -79,16 +94,17 @@ Everything discussed and agreed on for the cozy plant shop game. Living doc.
 - The shop sells **cultivars as variants**.
 - Heartleaf philodendron vs golden pothos = "tricky pair" confirm-UI moment.
 
-### Parked to phase 2 (designed, not built)
-- Owner-confirm flow: type name → DB autocomplete → reference photos →
-  confirm → "owner-confirmed" unlock. No DB match → personal label +
-  "suggest this variety" queue (demand-driven DB growth; the thin tail
+### Folded into V1 (was parked; simplified 2026-10-20)
+- The old owner-confirm design (type name → DB autocomplete → reference
+  photos → confirm → "owner-confirmed" unlock) became the no-tag path
+  above, minus the trust tiers. The hard gates are now just two: the typed
+  name must match a catalog species in the DB, and each visual plant can
+  be claimed once.
+- The "suggest this variety" queue survives as the **send-a-request**
+  fallback on the no-tag path (demand-driven DB growth; the thin tail
   heals itself through play).
-- Anti-fraud principle: automated checks **advise, never block** (the White
-  Knight lesson — subtle variegation must never false-reject). The only hard
-  gate is the DB lookup "cultivar ∈ confirmed species".
-- Trust tiers: nursery tag (trains model) > owner-confirmed (quarantined)
-  > personal name (no unlock, no training data).
+- Still parked: trust tiers, per-cultivar verification profiles,
+  variegation color checks, embedding-similarity nudges.
 
 ## ML validation (done)
 
@@ -118,11 +134,17 @@ Everything discussed and agreed on for the cozy plant shop game. Living doc.
 
 V1 excludes: cultivar-level scanning, shop relocation, social, story.
 
-## Interaction model (locked 2026-10-19, 4a+4b built same day)
+## Interaction model (locked 2026-10-19; serve + watering reworked 2026-10-19)
 
-- **Phases:** CLOSED = buy / plant / move / water, no customers. OPEN = 20 customers/day, serve (drag) + water only, no management. Time (growth/water) runs in both. Day ends after 20 with a summary; "Close" early anytime.
-- Tap (closed): empty slot = place modal (inventory + pot choice); occupied slot = manage modal (info + water + move grid). Tap (open): thirsty plant = water; otherwise nothing.
-- Drag plant → customer = serve. Drag elsewhere = spring back. Drag is phase-aware: CLOSED = drag to slot moves/swaps; OPEN = drag to customer serves.
+- **Phases:** CLOSED = buy / plant / move / water, no customers. OPEN = 20 customers/day, serve + water only, no management. Time (growth/water) runs in both. Day ends after 20 with a summary; "Close" early anytime.
+- **Tap rules (no more overloaded tap):**
+  - Tap (closed): empty slot = place modal (inventory + pot choice); occupied slot = manage modal (info + move grid). The can = watering.
+  - Tap (open): a plant = **select → it glides to the presentation spot** on the counter (front, enlarged 1.15×, name pill) = your confirmation. Tap it again (or empty space) = send it home. Tap another = swap.
+  - **Watering can tool:** tap the can (on the counter, right end) to pick it up; taps then water plants (water gauges appear on every plant); tap the can again (or serve) to put it down. Infinite for V1 (no capacity/refill). The can is placeholder Skia art for Ngoc to replace.
+  - A presented plant with water < 100% gets a **💧 button** by it — water in place, it stays presented.
+- **Serve (open): drag the PRESENTED plant the short hop to the customer.** Only the presented plant is draggable in open (others don't grab). Drop in the customer zone = graded/sale/refuse as before; wrong plant = refuse → it flies home. Drop elsewhere = back to the presentation spot. Drag stays for arranging in closed (drag to slot = move/swap).
+- Rationale: with interior design coming, plants will be small, scattered on shelves, and occluded by the customer/dialogue card. Precision-drag from anywhere breaks; **select → present → drag** keeps the tactile hand-over but the grab is always on a big plant in the open. Drag is the arrange verb (closed) and the hand-over verb (open), never a precision grab.
+- **Tools are the grammar:** watering can = tap tool → tap target. Repot (trowel) and trim (scissors) will follow the same pattern instead of fighting over what a tap means.
 - "!" marker = plant needs attention: thirsty → water; **root-bound → repot** (the two jobs the marker was designed for).
 - **Pots are two-dimensional: size × tier.** Size = 2" / 4" / 6", tier = Nursery / Terracotta / Ceramic / Designer. UI shows both plainly ("Terracotta 4in").
 - **Repot IS the stage-up.** Sprout in a 2" pot → growth meter fills → plant goes root-bound ("!"), growth pauses → repot to 4" = becomes "growing". Meter fills again → repot to 6" = "mature". No punishment timer, no death — the plant waits for you (the time gate is the growth meter, not a countdown).
@@ -134,6 +156,14 @@ V1 excludes: cultivar-level scanning, shop relocation, social, story.
   Requirement requests: graded 1–3 stars by deterministic trait overlap (no embeddings/NLP).
 - Patience varies per customer (values tbd).
 
+## Shelf & interior placement (locked + built 2026-10-20, placeholder art)
+
+- **4 light zones, 1 shelf per zone (an upgrade).** Window = bright direct light, Left Wall = bright indirect, Right Wall = medium, Showcase = low. Buying a shelf and assigning it to a zone swaps in the shelf's own plant slots (more spots); no dragging furniture. Assigning/removing is only allowed while the zone is EMPTY (same "clear it first" rule), so plants never dangle. The old shelf returns to storage; the zone's default surface is its starter.
+- **Slots belong to shelves/zones, not free positions.** Starter slots keep the original built-in ids (0–7); bought-shelf slots get fresh ids from a counter (8+), never reused.
+- **Player flow:** closed phase → "🪑 Shelves" panel → per zone, "Use [shelf]" from storage or "Remove" (empty only). Buy shelves in the supplier. One Wall Ledge starts in storage so the upgrade flow is testable immediately (Showcase starts empty — a natural first upgrade).
+- Starter defs (`src/data/shelves.ts`, placeholder art in `src/scene/ShelfSprite.tsx`): Wall Ledge 25c / 2 slots, Tall Bookcase 90c / 6 slots, Display Stand 60c / 2 slots. Zone spots (cx/baseY fractions) are tunable against the background art.
+- Supersedes the earlier decorate-drag design (deleted 2026-10-20): decorate mode, shelf-tray drag, wall-interval overlap, door-blocking, and the validity footprint are all gone.
+
 ## Plant sprite plan (2026-10-19)
 
 - **8 transparent plant sprites per species**, with growth stage and condition
@@ -141,19 +171,27 @@ V1 excludes: cultivar-level scanning, shop relocation, social, story.
   - Sprout: healthy, half dead (2 sprites).
   - Growing: healthy, thirsty, half dead (3 sprites).
   - Mature: healthy, thirsty, half dead (3 sprites).
-- Sprout thirst reuses the healthy sprite with a slight code-driven droop and
-  the "!" attention marker, giving a warning before the half-dead state.
+- Sprout thirst reuses the healthy sprite with the "!" attention marker,
+  giving a warning before the half-dead state. Any future code-driven droop
+  must affect foliage without shifting the soil anchor.
 - **Recovering is a gameplay state animated in code**, with no dedicated
   sprite: retain the thirsty/half-dead appearance initially, then gradually
   restore posture and transition toward healthy after care.
 - **Gone needs no plant sprite**; show the empty pot and soil.
-- **Plant sprites are separate from pots and soil.** Plant artwork contains
-  stems, leaves, flowers, and naturally exposed roots above the soil surface.
-  Layer pot/soil behind the plant and the pot's front rim over the stem base.
-- Keep canvas size and the soil-surface stem anchor consistent across each
-  species' growth/condition sprites to prevent jumps when swapping artwork.
-  Leave transparent space below the anchor for trailing vines to hang over
-  the pot.
+- **Plant sprites include visible soil and are separate from pots.** Layer
+  the pot behind the plant/soil sprite and its front rim over the stem base.
+- **All sprites across all species share canvas dimensions, soil width, and
+  a fixed bottom-center soil anchor.** Align by soil, never by foliage bounds.
+  Crossfades keep the same scale and anchor; do not shift the whole sprite
+  downward to show thirst.
+- All four current species use a **3:4 canvas (1254 × 1672)** with soil
+  bottom-center at **(627, 1045)** (50% across, 62.5% down) and soil width
+  normalized to **320 px**. Even the upright species have some wilted leaves
+  below the soil; the shared space beneath the anchor preserves them. Apply
+  this layout to all eight states, including sprouts, without per-species
+  offsets or padding changes.
+- Render at the original 3:4 aspect ratio and use the shared anchor to place
+  the soil inside the pot rim.
 - Animate idle sway and growth transitions in code; use stage/condition
   sprites instead of a baked growth GIF.
 

@@ -1,14 +1,23 @@
 // Plant sprite map. Folders in assets/plants/<folder>/.
-// Anchor = soil-mound point in the canvas (fractions), measured per species.
-// Sprout has no thirsty sprite — reuse healthy + code droop.
+// Every sprite uses the same 1254 x 1672 canvas and soil bottom-center (627, 1045).
+// Overhanging foliage has reserved space below that shared anchor in every state.
+// Sprout has no thirsty sprite — reuse healthy with the attention marker.
 
-export interface PlantArt { folder: string; ax: number; ay: number; size: number; }
+export interface PlantArt {
+  folder: string;
+  ax: number;
+  ay: number;
+  aspectRatio: number; // canvas width / height; size is the displayed width
+  size: number;
+}
+
+const SHARED_CANVAS = { ax: 0.5, ay: 0.625, aspectRatio: 3 / 4 };
 
 export const PLANT_ART: Record<string, PlantArt> = {
-  pothos: { folder: "golden-pothos", ax: 0.52, ay: 0.63, size: 150 },
-  monstera: { folder: "monstera-deliciosa", ax: 0.515, ay: 0.83, size: 140 },
-  snake: { folder: "snake-plant", ax: 0.5, ay: 0.83, size: 140 },
-  pilea: { folder: "pilea", ax: 0.52, ay: 0.83, size: 135 },
+  pothos: { folder: "golden-pothos", ...SHARED_CANVAS, size: 150 },
+  monstera: { folder: "monstera-deliciosa", ...SHARED_CANVAS, size: 140 },
+  snake: { folder: "snake-plant", ...SHARED_CANVAS, size: 140 },
+  pilea: { folder: "pilea", ...SHARED_CANVAS, size: 135 },
 };
 
 const SPRITES: Record<string, any> = {
@@ -57,7 +66,7 @@ export function plantCondition(water: number): 'healthy' | 'thirsty' | 'half-dea
 export function plantSpriteKey(stage: 0 | 1 | 2, water: number): string {
   const stageName = STAGE_NAMES[stage];
   let cond = plantCondition(water);
-  if (stageName === 'sprout' && cond === 'thirsty') cond = 'healthy'; // droop handled in code
+  if (stageName === 'sprout' && cond === 'thirsty') cond = 'healthy';
   return `${stageName}-${cond}`;
 }
 

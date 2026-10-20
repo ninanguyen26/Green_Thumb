@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Hand-drawn gold coin">
+  <path d="M258 54 C365 56 449 138 456 245 C464 352 385 445 278 457 C169 468 72 395 57 287 C42 181 118 78 226 57 C237 55 248 54 258 54 Z" fill="#E6AA49" stroke="#59402E" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M250 72 C346 72 425 148 437 243 C450 343 376 428 280 439 C178 450 91 382 77 284 C64 188 131 96 226 75" fill="none" stroke="#F6D17A" stroke-width="9" stroke-linecap="round" opacity=".85"/>
+  <path d="M251 104 C329 103 395 161 407 240 C420 321 360 394 280 407 C198 419 120 364 107 282 C94 201 151 125 229 107 C237 105 244 104 251 104 Z" fill="#F3C466" stroke="#8B5D35" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M254 162 C270 194 280 218 290 226 C299 234 327 238 354 243 C325 258 303 270 296 279 C286 293 284 323 278 347 C259 325 243 303 230 296 C218 288 191 287 164 280 C187 265 213 251 220 240 C229 227 241 185 254 162 Z" fill="#E6AA49" stroke="#8B5D35" stroke-width="9" stroke-linejoin="round"/>
+  <path d="M115 189 Q140 133 190 112 M135 336 Q158 371 196 387" fill="none" stroke="#FFF0B8" stroke-width="9" stroke-linecap="round" opacity=".7"/>
+</svg>

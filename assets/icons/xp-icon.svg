@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Hand-drawn muted pink heart">
+  <path d="M256 438
+           C229 413 105 310 77 232
+           C52 162 86 91 153 76
+           C201 65 239 89 258 126
+           C279 88 318 65 365 77
+           C431 94 462 164 435 234
+           C404 313 285 414 256 438 Z"
+        fill="#C9858E"
+        stroke="#59402E"
+        stroke-width="14"
+        stroke-linejoin="round"/>
+  <path d="M104 218
+           C88 170 109 120 154 103
+           C188 90 218 103 238 130"
+        fill="none"
+        stroke="#E9B2B8"
+        stroke-width="9"
+        stroke-linecap="round"
+        opacity=".82"/>
+  <path d="M112 257
+           C129 302 166 344 199 375"
+        fill="none"
+        stroke="#E9B2B8"
+        stroke-width="9"
+        stroke-linecap="round"
+        opacity=".55"/>
+</svg>

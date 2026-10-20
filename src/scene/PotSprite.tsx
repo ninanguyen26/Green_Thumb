@@ -1,4 +1,12 @@
-import { useDerivedValue, type SharedValue } from "react-native-reanimated";
+import { useEffect, useRef, useState } from "react";
+import {
+  useDerivedValue,
+  useSharedValue,
+  useAnimatedReaction,
+  withTiming,
+  withSpring,
+  type SharedValue,
+} from "react-native-reanimated";
 import { RoundedRect, Circle, Image as SkImage, useImage } from "@shopify/react-native-skia";
 import { speciesById, POT_TIERS, type PotTier } from "../data/plants";
 import { PLANT_ART, plantSpriteKey, plantSpriteSource } from "./plantSprites";
@@ -24,11 +32,15 @@ interface Props {
   dragDX: SharedValue<number>;
   dragDY: SharedValue<number>;
   dragScale: SharedValue<number>;
+  presentedId: SharedValue<string | null>;
+  glideId: SharedValue<string | null>;
+  glideDX: SharedValue<number>;
+  glideDY: SharedValue<number>;
 }
 
-// Soil sits this far above the pot center (inside the rim band) at scale 1.
-// Nudge this if plants float or sink.
-const SOIL_OFFSET = 56;
+// The soil mound ends just inside the pot's front rim (whose top is sy - 68*s).
+// Keep this offset tied to the same scale and center as the pot geometry.
+const SOIL_OFFSET = 63;
 
 interface LeafDef {
   ox: number;
@@ -118,26 +130,51 @@ function PotRim({
   return <RoundedRect x={rimX} y={rimY} width={rimW} height={rimH} r={8} color={potRim} />;
 }
 
-export function PotSprite({ id, pots, clock, dragId, dragDX, dragDY, dragScale }: Props) {
+export function PotSprite({ id, pots, clock, dragId, dragDX, dragDY, dragScale, presentedId, glideId, glideDX, glideDY }: Props) {
   // Which art (if any) + which sprite key. Recomputed on React re-render (tick-driven).
   const pd = pots.value[id];
   const art = pd ? PLANT_ART[pd.speciesId] : undefined;
-  const src = pd && art ? plantSpriteSource(pd.speciesId, plantSpriteKey(pd.stage, pd.water)) : null;
-  const img = useImage(src);
+  const curSrc =
+    pd && art ? plantSpriteSource(pd.speciesId, plantSpriteKey(pd.stage, pd.water)) : null;
+
+  // Crossfade between states: keep the previous sprite and fade it out over
+  // the new one. Keep both at full scale so the soil never shrinks or shifts.
+  const [shown, setShown] = useState<{ cur: typeof curSrc; prev: typeof curSrc }>({
+    cur: curSrc,
+    prev: null,
+  });
+  const lastSrcRef = useRef(curSrc);
+  const fade = useSharedValue(1);
+  useEffect(() => {
+    if (curSrc !== lastSrcRef.current) {
+      const prev = lastSrcRef.current;
+      lastSrcRef.current = curSrc;
+      setShown({ cur: curSrc, prev });
+      fade.value = 0;
+      fade.value = withTiming(1, { duration: 450 });
+    }
+  }, [curSrc, fade]);
+  const curImg = useImage(shown.cur);
+  const prevImg = useImage(shown.prev);
+  const curOp = useDerivedValue(() => fade.value);
+  const prevOp = useDerivedValue(() => 1 - fade.value);
 
   const sx = useDerivedValue(() => {
     const p = pots.value[id];
     if (!p) return -1000;
-    return p.wx + (dragId.value === id ? dragDX.value : 0);
+    return p.wx + (dragId.value === id ? dragDX.value : 0) + (glideId.value === id ? glideDX.value : 0);
   });
   const sy = useDerivedValue(() => {
     const p = pots.value[id];
     if (!p) return -1000;
-    return p.wy + (dragId.value === id ? dragDY.value : 0);
+    return p.wy + (dragId.value === id ? dragDY.value : 0) + (glideId.value === id ? glideDY.value : 0);
   });
   const s = useDerivedValue(() => {
     if (!pots.value[id]) return 0;
-    return dragId.value === id ? dragScale.value : 1;
+    // presented plant gets emphasis; drag pickup wins via max (no stacking)
+    const d = dragId.value === id ? dragScale.value : 1;
+    const p = presentedId.value === id ? 1.15 : 1;
+    return Math.max(d, p);
   });
   const sway = useDerivedValue(() => {
     const p = pots.value[id];
@@ -148,11 +185,20 @@ export function PotSprite({ id, pots, clock, dragId, dragDX, dragDY, dragScale }
     const p = pots.value[id];
     return p ? speciesById(p.speciesId).leaf : "#4a7c3a";
   });
-  const gs = useDerivedValue(() => {
+  // Fallback-leaf growth scale: spring toward the stage target instead of snapping.
+  const gsTarget = useDerivedValue(() => {
     const p = pots.value[id];
     if (!p) return 0;
     return [0.55, 0.8, 1][p.stage] ?? 1;
   });
+  const gs = useSharedValue(pd ? [0.55, 0.8, 1][pd.stage] ?? 1 : 1);
+  useAnimatedReaction(
+    () => gsTarget.value,
+    (v) => {
+      if (v !== gs.value) gs.value = withSpring(v, { damping: 13, stiffness: 110 });
+    },
+    []
+  );
   const potColor = useDerivedValue(() => {
     const p = pots.value[id];
     return p ? POT_TIERS[p.pot].color : "#8a6a4f";
@@ -163,33 +209,39 @@ export function PotSprite({ id, pots, clock, dragId, dragDX, dragDY, dragScale }
   });
 
   // Plant image geometry: anchor the art's soil point at the pot's soil line.
-  const imgS = useDerivedValue(() => {
+  // Both crossfade layers share the soil anchor; each sizes from it so the
+  // incoming sprite can grow in without sliding.
+  // The soil is a fixed point on the pot, including while presenting or
+  // dragging. Moving the whole image for idle sway would make it slide on the rim.
+  const soilX = useDerivedValue(() => sx.value);
+  const soilY = useDerivedValue(() => sy.value - SOIL_OFFSET * s.value);
+  const curS = useDerivedValue(() => {
     if (!pots.value[id] || !art) return 0;
-    return art.size * (dragId.value === id ? dragScale.value : 1);
+    return art.size * s.value;
   });
-  const imgX = useDerivedValue(() => {
-    const p = pots.value[id];
-    if (!p || !art) return -1000;
-    const sc = dragId.value === id ? dragScale.value : 1;
-    const swayX = Math.sin(clock.value * 1.4 + p.phase) * 4;
-    const soilX = p.wx + (dragId.value === id ? dragDX.value : 0) + swayX;
-    return soilX - art.ax * art.size * sc;
+  const curH = useDerivedValue(() => curS.value / (art ? art.aspectRatio : 1));
+  const curX = useDerivedValue(() => soilX.value - (art ? art.ax : 0) * curS.value);
+  const curY = useDerivedValue(() => soilY.value - (art ? art.ay : 0) * curH.value);
+  const prevS = useDerivedValue(() => {
+    if (!pots.value[id] || !art) return 0;
+    return art.size * s.value;
   });
-  const imgY = useDerivedValue(() => {
-    const p = pots.value[id];
-    if (!p || !art) return -1000;
-    const sc = dragId.value === id ? dragScale.value : 1;
-    // sprout thirst: no thirsty sprite — slight code droop instead
-    const droop = p.stage === 0 && p.water < 0.35 && p.water > 0.02 ? 6 * sc : 0;
-    const soilY = p.wy + (dragId.value === id ? dragDY.value : 0) - SOIL_OFFSET * sc + droop;
-    return soilY - art.ay * art.size * sc;
-  });
+  const prevH = useDerivedValue(() => prevS.value / (art ? art.aspectRatio : 1));
+  const prevX = useDerivedValue(() => soilX.value - (art ? art.ax : 0) * prevS.value);
+  const prevY = useDerivedValue(() => soilY.value - (art ? art.ay : 0) * prevH.value);
 
   return (
     <>
       <PotBack sx={sx} sy={sy} s={s} potColor={potColor} />
       {art ? (
-        img ? <SkImage image={img} x={imgX} y={imgY} width={imgS} height={imgS} /> : null
+        <>
+          {prevImg && (
+            <SkImage image={prevImg} x={prevX} y={prevY} width={prevS} height={prevH} fit="fill" opacity={prevOp} />
+          )}
+          {curImg && (
+            <SkImage image={curImg} x={curX} y={curY} width={curS} height={curH} fit="fill" opacity={curOp} />
+          )}
+        </>
       ) : (
         LEAVES.map((leaf, i) => (
           <Leaf key={i} leaf={leaf} leafBase={leafBase} sx={sx} sy={sy} s={s} gs={gs} sway={sway} />

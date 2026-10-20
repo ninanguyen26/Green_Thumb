@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "GreenThumb",
+    "slug": "green-thumb",
+    "version": "0.1.0",
+    "orientation": "landscape",
+    "jsEngine": "hermes",
+    "ios": {
+      "bundleIdentifier": "com.ngoc.greenthumb",
+      "supportsTablet": true,
+      "appleTeamId": "736S25CW86"
+    },
+    "android": {
+      "package": "com.ngoc.greenthumb"
+    }
+  }
+}

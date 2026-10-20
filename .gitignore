@@ -1,0 +1,36 @@
+# Dependencies and Expo local state
+node_modules/
+.expo/
+dist/
+web-build/
+
+# Native build output and local configuration
+build/
+DerivedData/
+Pods/
+xcuserdata/
+*.xcuserstate
+.xcode.env.local
+local.properties
+.gradle/
+*.ipa
+*.apk
+*.aab
+*.jsbundle
+
+# Local credentials and signing files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.p8
+*.mobileprovision
+*.keystore
+*.jks
+
+# OS, editor, and debug files
+.DS_Store
+*.log
+*.tsbuildinfo

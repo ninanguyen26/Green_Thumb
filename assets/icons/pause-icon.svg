@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64" role="img" aria-label="Pause">
+  <g fill="#59402E" stroke="#F7E8C6" stroke-width="1.5">
+    <rect x="15" y="10" width="12" height="44" rx="4"/>
+    <rect x="37" y="10" width="12" height="44" rx="4"/>
+  </g>
+</svg>

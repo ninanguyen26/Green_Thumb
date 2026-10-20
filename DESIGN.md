@@ -122,7 +122,7 @@ Everything discussed and agreed on for the cozy plant shop game. Living doc.
 1. 71-species content audit ✅ (seed data authored 2026-10-20: plant-database.json, 41 species verified on thesill.com, APPROVED by Ngoc 2026-10-20; 30 fallback species cut by Ngoc; growth time stays global for V1)
 2. Scaffold (Expo + Skia) ✅ — this folder, one-room GPGP layout
 3. Customer loop (in progress): counter + customer + dialogue/patience + drag-to-serve + coins
-- **Tend (4a, built 2026-10-19):** water meter per plant (~60s drain) + 3 growth stages (sprout/growing/mature, ~25s/stage, only when watered). Tap plant = water (blue droplet burst). "!" attention marker: thirsty → water, root-bound → repot. Sell anytime: price scales with maturity (30%/60%/100%) — no mature-gate; selling babies at a loss emerges once buy prices exist (4b).
+- **Tend (4a, built 2026-10-19):** water meter per plant (~60s drain) + 3 growth stages (sprout/growing/mature, only when watered). Stage time is per-species since 2026-10-20: growth groups (fast/mid/slow from the plant database) × game hours per stage (1h/2h/4h; 1 game hour = 1 real minute, Ngoc's pick) — a stage takes 1m/2m/4m real time at full light. Replaces the original flat ~25s/stage. Tap plant = water (blue droplet burst). "!" attention marker: thirsty → water, root-bound → repot. Sell anytime: price scales with maturity (30%/60%/100%) — no mature-gate; selling babies at a loss emerges once buy prices exist (4b).
 - **Repot & pot sizes (4c, designed 2026-10-19, not built):** repot IS the stage-up (growth meter fills → root-bound "!" → repot to next size advances the stage); sizes 2"/4"/6" × tiers (Nursery/Terracotta/Ceramic/Designer); old pots return to a reusable stash; sale carries the current pot's bonus. Sequences after sprites land and the loop tests clean.
 5. Zone gameplay (light tiers matter)
 6. City + seasons (ON HOLD 2026-10-20 — Ngoc)
@@ -176,6 +176,30 @@ V1 excludes: cultivar-level scanning, shop relocation, social, story.
 - **Grow lights stay in Step 7** (buy one per zone → that zone counts +1 light level).
 - **Cities ON HOLD (Ngoc, 2026-10-20):** Step 6 city/season differences are held — zone light is a fixed base level for now; no city/season modifier plumbing in Step 5.
 - **Out of scope:** sales/visibility bonuses per zone (parked).
+
+## Condition pricing (designed + built 2026-10-20)
+
+Sale price gains a condition factor, based on the sprite state at the moment of sale (the same state the player sees — `plantSpriteKey`):
+
+- **Healthy → ×1**
+- **Thirsty → ×0.8** (water < 0.35; waterlogged and bad-light droop also show as thirsty)
+- **Half-dead → ×0.5** (water ≤ 0.02)
+
+Multiplies into the existing price (sell × stars × maturity × pot bonus × condition). Until now condition was purely cosmetic (growth pause + art); this gives care an economic consequence while staying a recoverable nudge, not a punishment. Facts that shaped it: half-dead is a water-only state, can occur in either phase (water drains while open too), and is fixable during open hours with one watering tap (can, or the presented plant's 💧 button). Bad-light droop cannot be fixed while open (plants can't move; the counter freezes), but it only ever prices at the thirsty tier, never half-dead.
+
+## Fertilizer & soil (designed 2026-10-20, not built)
+
+Rule for both: decisions, not chores — the Leafy Corner complaint pattern is recurring maintenance (watering at scale), never depth. Anything that becomes daily upkeep is out.
+
+**Fertilizer — a consumable boost, never a requirement.** Bought item, applied to one plant: that plant grows ~+50% faster for its current stage. Value is strategic timing (worth it on a slow grower like the snake plant at 4h/stage; pointless on a pothos). No fertilizer meter, no penalty for never using it.
+
+**Soil — a placement choice, like pot tiers.** Chosen when a plant is placed; changeable at repot (Step 4c — repotting is when soil really changes). Three soils, matched against the species' water category:
+
+- **Standard** — no change.
+- **Moisture-retentive** — water drains ~20% slower (suits medium/high-water species).
+- **Gritty / fast-drain** — harder to overwater: the waterlogged threshold rises (suits low-water species like snake plant and aloe).
+
+Right soil for the species = a small edge; wrong soil = a small handicap (drains slightly faster). Zero upkeep after the choice. Effects are deliberately slight — real, not just cosmetic, but never a gate.
 
 ## Plant sprite plan (2026-10-19)
 
@@ -234,6 +258,57 @@ V1 excludes: cultivar-level scanning, shop relocation, social, story.
 - **Two currencies.** **Coins** buy things (plants, pots, interior). **Hearts** are earned from customer happiness (stars) and are **spent** to unlock Album entries — hearts go down on unlock, like coins. **Unlock ≠ own:** unlocking opens the species; buying the plant still costs coins in the Shop.
 - Scanner tie-in (Step 9): a wild claim unlocks its Album entry the free way, with the wild-specimen tag — the camera's payoff.
 - Draft numbers for the build (tunable): hearts per sale = stars (1/2/3♥); the 6 shop species start unlocked; unlock costs for the other 35 tier by rarity.
+
+## Expansion rooms — selling more shop (designed 2026-10-20, not built)
+
+- **Why:** Leafy Corner complaint #2 — collections outgrow the shop, and players
+  ask for *additional areas*, not just bigger shelves. Capacity becomes
+  progression and a long-term coin sink (also softens the "runs out of goals"
+  complaint).
+- **The offer:** rooms are bought with coins. Start = the current room; then a
+  **back room**; then a **greenhouse** (a rooftop is possible later). Each room
+  is one background image with its own 4 light zones, slots, and shelves.
+- **Identity = light, not location.** The greenhouse is high light everywhere;
+  the back room leans low-light. Rooms do NOT depend on the cities feature —
+  Step 6 stays on hold (city differences can't be shown in the current
+  background art, and rooms don't need them).
+- **Navigation:** walk between rooms (door / edge arrows) freely while CLOSED.
+- **Open hours — the main room is retail; side rooms are the grow-op.**
+  Customers, the counter, and the present spot exist only in the main room.
+  Plants in side rooms still grow, use light, and need water; you visit to
+  water, and while closed to arrange. That split gives side rooms a job beyond
+  storage: grow under greenhouse light, bring the best stock to the floor.
+- **The fetch (serving across rooms):** while OPEN, tap a plant in a side room
+  → it presents at the counter and the view returns to the main room on its
+  own → drag to the customer, exactly as today. No cross-room dragging (drag
+  stays a same-screen gesture). The fetch costs the two taps only — no fee, no
+  timer; customer patience is unchanged.
+- **Small-plant safeguards (chosen over zoom):** more rooms mean more plants
+  at smaller sizes, so mis-taps get likelier. Mitigations: tap targets stay
+  generous regardless of sprite size; tap = present/swap, so a wrong pick is
+  fixed by tapping the right plant (the wrong one goes home — no extra trip);
+  the presented plant renders big with its name pill before anything is
+  decided; plants matching the customer's request can glow in every room.
+  **Free pinch zoom: not planned** (two-handed, and it fights the drag
+  gesture's coordinate math). Parked alternative: double-tap a zone to focus
+  it, double-tap to return — build only if playtesting says hunting still
+  hurts.
+- **Sequencing:** per-zone shelf upgrades (built) are the early capacity ramp;
+  back room = first big purchase; greenhouse = late game. This is the biggest
+  single feature on the list (room switching + per-room state); when built it
+  supersedes the "ONE fixed room" line in the light & zones section.
+
+## Leafy Corner complaint tracker (researched 2026-10-20 — tackle as we go)
+
+From a full sweep of Leafy Corner's Steam reviews (2,976; theme analysis over all of them + the 100 most-visible read directly) and critic reviews. This is the list Green Thumb is designed against; statuses are where we stand.
+
+1. **Hand-watering everything (top complaint).** At scale, watering every pot by hand is misery; players beg for staff / auto-watering. → **Designed, not built:** self-watering pots (early, single-plant) + shop-wide scheduled watering system (late) — Step 7. Manual watering stays early on purpose so the automation feels earned.
+2. **Shop runs out of room (~7% of complaints).** Collections outgrow the display space; players ask for bigger expansions / additional areas. → **Designed 2026-10-20, not built:** buyable expansion rooms (back room → greenhouse), each with its own 4 light zones — Step 8b (see Expansion rooms section above).
+3. **Runs out of goals (~6%).** Max reputation + all unlocks done in under ~12h, then nothing left to chase. → **Partially built:** hearts + Album (41 species to unlock), the plant database as collection backbone; scanner claims (Step 9) are the endless real-world goal. Watch: playable species is still only 6 — the chase layer (Step 10) and more playable species close this fully.
+4. **No search / filter in the catalog (~6%).** With 100+ plants, finding the one a customer wants means scrolling forever. → **Not yet a problem at 6 species:** Shop is a visual grid, Album is the catalog. Revisit when the playable list grows — the Album's info-visible locked rows already double as a browsable index.
+5. **Repetitive loop (~4%).** Plant → water → sell → decorate, identical care routine for every plant; the source of the "boring" comments. → **Built:** light zones make placement a decision; per-species water categories + overwatering make care differ; growth groups (fast/mid/slow, hours per stage, wired 2026-10-20) make timing differ. Root pattern in their game: the loop contains no decisions — ours is built out of them.
+
+Checked and NOT a complaint: **growth speed.** Nobody in the reviews says plants grow too fast (zero hits for it in the top 100; the one growth-time comment praises it being quick). The "too fast" people remember is complaint #3 — progression/unlocks running out.
 
 ## Open questions
 

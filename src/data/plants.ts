@@ -1,8 +1,11 @@
+import { theme } from "../theme";
 // Starter catalog: species, traits, prices. (Full 71-species seed comes in Step 1 of PROGRESS.md.)
 
 export type TraitKey = "petSafe" | "easyCare" | "lowLight" | "brightLight";
 
 export type WaterNeed = "low" | "medium" | "high";
+
+export type GrowthSpeed = "fast" | "mid" | "slow";
 
 export interface Species {
   id: string;
@@ -14,15 +17,16 @@ export interface Species {
   lightMin: number; // tolerated light band (1 low .. 4 direct), from plant-database.json (The Sill, 2026-10-20)
   lightMax: number;
   water: WaterNeed; // water group: sets drain speed + how much overwater it tolerates
+  growth: GrowthSpeed; // growth group: sets hours per growth stage (plant-database.json)
 }
 
 export const SPECIES: Species[] = [
-  { id: "pothos", name: "Golden Pothos", leaf: "#43a047", buy: 10, sell: 20, traits: ["easyCare", "lowLight"], lightMin: 1, lightMax: 3, water: "medium" },
-  { id: "monstera", name: "Monstera", leaf: "#1b5e20", buy: 18, sell: 35, traits: ["easyCare"], lightMin: 2, lightMax: 3, water: "medium" },
-  { id: "snake", name: "Snake Plant", leaf: "#7cb342", buy: 13, sell: 25, traits: ["easyCare", "lowLight"], lightMin: 1, lightMax: 4, water: "low" },
-  { id: "pilea", name: "Pilea", leaf: "#66bb6a", buy: 15, sell: 30, traits: ["petSafe", "easyCare"], lightMin: 2, lightMax: 4, water: "medium" },
-  { id: "fern", name: "Boston Fern", leaf: "#2e7d32", buy: 14, sell: 28, traits: ["petSafe", "lowLight"], lightMin: 2, lightMax: 3, water: "medium" },
-  { id: "aloe", name: "Aloe Vera", leaf: "#9ccc65", buy: 11, sell: 22, traits: ["easyCare", "brightLight"], lightMin: 3, lightMax: 4, water: "low" },
+  { id: "pothos", name: "Golden Pothos", leaf: theme.art.leaf, buy: 10, sell: 20, traits: ["easyCare", "lowLight"], lightMin: 1, lightMax: 3, water: "medium", growth: "fast" },
+  { id: "monstera", name: "Monstera", leaf: theme.art.leafDark, buy: 18, sell: 35, traits: ["easyCare"], lightMin: 2, lightMax: 3, water: "medium", growth: "fast" },
+  { id: "snake", name: "Snake Plant", leaf: theme.art.leafLight, buy: 13, sell: 25, traits: ["easyCare", "lowLight"], lightMin: 1, lightMax: 4, water: "low", growth: "slow" },
+  { id: "pilea", name: "Pilea", leaf: theme.art.leafLight, buy: 15, sell: 30, traits: ["petSafe", "easyCare"], lightMin: 2, lightMax: 4, water: "medium", growth: "fast" },
+  { id: "fern", name: "Boston Fern", leaf: theme.art.leaf, buy: 14, sell: 28, traits: ["petSafe", "lowLight"], lightMin: 2, lightMax: 3, water: "medium", growth: "fast" },
+  { id: "aloe", name: "Aloe Vera", leaf: theme.art.leafPale, buy: 11, sell: 22, traits: ["easyCare", "brightLight"], lightMin: 3, lightMax: 4, water: "low", growth: "slow" },
 ];
 
 // Seconds for a full meter to drain, by water group. (Tuned 2026-10-20:
@@ -41,6 +45,30 @@ export const WATER_MAX: Record<WaterNeed, number> = { low: 1.25, medium: 1.4, hi
 
 // Each watering adds this much. Two taps from empty = full.
 export const WATER_PER_TAP = 0.5;
+
+// Growth time is measured in GAME HOURS per stage, by growth group
+// (plant-database.json). One game hour = GAME_HOUR_S real seconds — the
+// tuning knob if the whole game clock ever changes pace. Light still
+// scales the rate on top of this (in range full / one out half / two+ out 0).
+export const GAME_HOUR_S = 60;
+export const GROWTH_HOURS: Record<GrowthSpeed, number> = { fast: 1, mid: 2, slow: 4 };
+
+// Real seconds one growth stage takes this species at full speed.
+export function stageSeconds(sp: Species): number {
+  return GROWTH_HOURS[sp.growth] * GAME_HOUR_S;
+}
+
+// Sale-price factor from the plant's VISIBLE condition at the moment of
+// sale (mirrors plantSpriteKey exactly): healthy x1, thirsty x0.8,
+// half-dead x0.5. Droop (waterlogged or bad-light) shows as thirsty;
+// sprouts never show thirsty. Worklet-safe (used in the serve gesture).
+export function conditionFactor(stage: 0 | 1 | 2, water: number, droop: boolean): number {
+  "worklet";
+  let cond = water <= 0.02 ? 2 : water < 0.35 ? 1 : 0; // 0 healthy, 1 thirsty, 2 half-dead
+  if (droop && cond === 0) cond = 1;
+  if (stage === 0 && cond === 1) cond = 0;
+  return [1, 0.8, 0.5][cond];
+}
 
 // Light gap between a species and a zone level: 0 = in range (full growth),
 // 1 = one tier out (half speed), 2+ = too far (growth pauses). Worklet-safe.
@@ -124,10 +152,10 @@ export interface PotTierInfo {
 }
 
 export const POT_TIERS: Record<PotTier, PotTierInfo> = {
-  nursery: { name: "Nursery Pot", price: 0, bonus: 0, color: "#8a6a4f", rim: "#6e543d" },
-  terracotta: { name: "Terracotta", price: 3, bonus: 0.2, color: "#c9763f", rim: "#a8562a" },
-  ceramic: { name: "Ceramic", price: 8, bonus: 0.5, color: "#e8e0d4", rim: "#c9bda9" },
-  designer: { name: "Designer", price: 15, bonus: 1.0, color: "#5d4e7a", rim: "#463c5e" },
+  nursery: { name: "Nursery Pot", price: 0, bonus: 0, color: theme.art.nursery, rim: theme.art.nurseryRim },
+  terracotta: { name: "Terracotta", price: 3, bonus: 0.2, color: theme.art.terracotta, rim: theme.art.terracottaRim },
+  ceramic: { name: "Ceramic", price: 8, bonus: 0.5, color: theme.art.ceramic, rim: theme.art.ceramicRim },
+  designer: { name: "Designer", price: 15, bonus: 1.0, color: theme.art.designer, rim: theme.art.designerRim },
 };
 
 export const POT_TIER_ORDER: PotTier[] = ["nursery", "terracotta", "ceramic", "designer"];

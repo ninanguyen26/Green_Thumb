@@ -1,12 +1,17 @@
+import { theme } from "../theme";
 import { useDerivedValue, type SharedValue } from "react-native-reanimated";
-import { Circle, Line, RoundedRect } from "@shopify/react-native-skia";
+import { Circle, Image as SkImage, useImage } from "@shopify/react-native-skia";
 
-// Placeholder art for the watering can tool — Ngoc to replace with a sprite.
+// Watering can tool — Ngoc's art (assets/tools/watering_can.png, square).
 // x, y = room position of the can's base center. held = 0..1 (springs).
-// When held, a soft glow marks it active (water gauges on the plants do the rest).
+// At rest the can sits on its shadow bubble. Picked up (held -> 1) it lifts
+// off the ground: rises, scales up, tilts, and the shadow stays behind on
+// the floor, smaller and darker. Released: springs back to normal.
 
-const BODY = "#8fb3c9";
-const DARK = "#5f7f99";
+const SIZE = 104; // square display size
+const LIFT = 12; // px the can rises when picked up
+const TILT = -0.09; // rad of tilt when picked up
+const GROW = 0.14; // scale gain when picked up
 
 export function WateringCan({
   x,
@@ -17,24 +22,44 @@ export function WateringCan({
   y: number;
   held: SharedValue<number>;
 }) {
-  const glowOp = useDerivedValue(() => 0.32 * held.value);
-  const tipX = x + 48;
-  const tipY = y - 30;
+  const img = useImage(require("../../assets/tools/watering_can.png"));
+  // Image rect: centered on x, standing on the ground line (base y + 34).
+  const imgX = x - SIZE / 2;
+  const imgY = y + 34 - SIZE;
+  const cx = x;
+  const cy = imgY + SIZE / 2;
+  const groundY = y + 38;
 
+  // Picked-up transform: lift, then pivot tilt+scale around the can's center.
+  const canTransform = useDerivedValue(() => {
+    const h = held.value;
+    return [
+      { translateY: -LIFT * h },
+      { translateX: cx },
+      { translateY: cy },
+      { rotate: TILT * h },
+      { scale: 1 + GROW * h },
+      { translateX: -cx },
+      { translateY: -cy },
+    ];
+  });
+  // Shadow bubble: stays on the floor; shrinks a little as the can lifts.
+  const shadowTransform = useDerivedValue(() => {
+    const s = 1 - 0.18 * held.value;
+    return [
+      { translateX: x },
+      { translateY: groundY },
+      { scaleX: 32 * s },
+      { scaleY: 9 * s },
+    ];
+  });
+  const shadowOp = useDerivedValue(() => 0.15 + 0.09 * held.value);
+
+  if (!img) return null;
   return (
     <>
-      <Circle cx={x} cy={y} r={48} color="#7fc8f2" opacity={glowOp} />
-      {/* body */}
-      <RoundedRect x={x - 29} y={y - 16} width={58} height={44} r={10} color={BODY} />
-      <RoundedRect x={x - 29} y={y + 12} width={58} height={16} r={6} color={DARK} opacity={0.45} />
-      {/* spout */}
-      <Line p1={{ x: x + 16, y: y - 6 }} p2={{ x: tipX, y: tipY }} color={BODY} strokeWidth={11} />
-      <Circle cx={tipX} cy={tipY} r={8} color={DARK} />
-      {/* handle */}
-      <Line p1={{ x: x - 22, y: y - 12 }} p2={{ x: x - 22, y: y - 34 }} color={DARK} strokeWidth={9} />
-      <Line p1={{ x: x - 22, y: y - 34 }} p2={{ x: x + 4, y: y - 34 }} color={DARK} strokeWidth={9} />
-      {/* fill opening */}
-      <RoundedRect x={x - 10} y={y - 20} width={20} height={7} r={3.5} color={DARK} />
+      <Circle cx={0} cy={0} r={1} color={theme.colors.shadow} opacity={shadowOp} transform={shadowTransform} />
+      <SkImage image={img} x={imgX} y={imgY} width={SIZE} height={SIZE} fit="fill" transform={canTransform} />
     </>
   );
 }

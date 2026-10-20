@@ -1,3 +1,4 @@
+import { theme } from "../theme";
 import { RoundedRect } from "@shopify/react-native-skia";
 import { shelfById } from "../data/shelves";
 
@@ -5,10 +6,10 @@ import { shelfById } from "../data/shelves";
 // watering can). x = left edge, baseY = base line, sc = H/390 scale.
 // Drawn in shelf-local space: the shelf body spans y in [baseY-height, baseY].
 
-const WOOD = "#a9743f";
-const WOOD_DARK = "#7d5527";
-const WOOD_LIGHT = "#c98d54";
-const BACK = "#8a5a2e";
+const WOOD = theme.art.wood;
+const WOOD_DARK = theme.art.woodDark;
+const WOOD_LIGHT = theme.art.woodLight;
+const BACK = theme.art.woodBack;
 
 export function ShelfSprite({
   defId,

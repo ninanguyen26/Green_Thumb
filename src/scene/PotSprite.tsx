@@ -1,3 +1,4 @@
+import { theme } from "../theme";
 import { useEffect, useRef, useState } from "react";
 import {
   useDerivedValue,
@@ -185,7 +186,7 @@ export function PotSprite({ id, pots, clock, dragId, dragDX, dragDY, dragScale, 
   });
   const leafBase = useDerivedValue(() => {
     const p = pots.value[id];
-    return p ? speciesById(p.speciesId).leaf : "#4a7c3a";
+    return p ? speciesById(p.speciesId).leaf : theme.art.leaf;
   });
   // Fallback-leaf growth scale: spring toward the stage target instead of snapping.
   const gsTarget = useDerivedValue(() => {
@@ -203,11 +204,11 @@ export function PotSprite({ id, pots, clock, dragId, dragDX, dragDY, dragScale, 
   );
   const potColor = useDerivedValue(() => {
     const p = pots.value[id];
-    return p ? POT_TIERS[p.pot].color : "#8a6a4f";
+    return p ? POT_TIERS[p.pot].color : theme.art.nursery;
   });
   const potRim = useDerivedValue(() => {
     const p = pots.value[id];
-    return p ? POT_TIERS[p.pot].rim : "#6e543d";
+    return p ? POT_TIERS[p.pot].rim : theme.art.nurseryRim;
   });
 
   // Plant image geometry: anchor the art's soil point at the pot's soil line.
@@ -231,6 +232,25 @@ export function PotSprite({ id, pots, clock, dragId, dragDX, dragDY, dragScale, 
   const prevH = useDerivedValue(() => prevS.value / (art ? art.aspectRatio : 1));
   const prevX = useDerivedValue(() => soilX.value - (art ? art.ax : 0) * prevS.value);
   const prevY = useDerivedValue(() => soilY.value - (art ? art.ay : 0) * prevH.value);
+  // Idle sway for the real sprites: lean around the soil anchor instead of
+  // sliding sideways — the base stays planted on the rim, the top drifts.
+  // Same sine + per-plant phase as the fallback leaves; ±0.03 rad ≈ ±1.7°.
+  // One derived transform array (translate to anchor, rotate, translate
+  // back) — this Skia build's recorder rejects a raw SkMatrix as transform.
+  const swayTransform = useDerivedValue(() => {
+    const p = pots.value[id];
+    if (!p) return [];
+    const a = Math.sin(clock.value * 1.4 + p.phase) * 0.03;
+    const ax = soilX.value;
+    const ay = soilY.value;
+    return [
+      { translateX: ax },
+      { translateY: ay },
+      { rotate: a },
+      { translateX: -ax },
+      { translateY: -ay },
+    ];
+  });
 
   return (
     <>
@@ -238,10 +258,10 @@ export function PotSprite({ id, pots, clock, dragId, dragDX, dragDY, dragScale, 
       {art ? (
         <>
           {prevImg && (
-            <SkImage image={prevImg} x={prevX} y={prevY} width={prevS} height={prevH} fit="fill" opacity={prevOp} />
+            <SkImage image={prevImg} x={prevX} y={prevY} width={prevS} height={prevH} fit="fill" opacity={prevOp} transform={swayTransform} />
           )}
           {curImg && (
-            <SkImage image={curImg} x={curX} y={curY} width={curS} height={curH} fit="fill" opacity={curOp} />
+            <SkImage image={curImg} x={curX} y={curY} width={curS} height={curH} fit="fill" opacity={curOp} transform={swayTransform} />
           )}
         </>
       ) : (

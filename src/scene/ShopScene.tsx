@@ -1,5 +1,6 @@
+import { theme } from "../theme";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, View, Text, TouchableOpacity, Pressable, ScrollView, Image, useWindowDimensions } from "react-native";
+import { StyleSheet, View, Text, TouchableOpacity, Image, useWindowDimensions } from "react-native";
 import { Canvas, Image as SkImage, useImage } from "@shopify/react-native-skia";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import {
@@ -16,9 +17,10 @@ import { PotSprite, type PotData } from "./PotSprite";
 import { ParticleLayer, spawnBurst, type Particle } from "./Particles";
 import { CustomerSprite } from "./CustomerSprite";
 import { WateringCan } from "./WateringCan";
+import { CustomerBubble, PresentedPill, PRESENT_POS } from "./OpenShop";
+import { OpenShopButton, ClosedModals } from "./ClosedShop";
 import { ShelfSprite } from "./ShelfSprite";
 import {
-  SHELF_DEFS,
   shelfById,
   ZONES,
   zoneById,
@@ -27,9 +29,10 @@ import {
 } from "../data/shelves";
 import { CUSTOMER_COUNT, type CustomerMood } from "./customerSprites";
 import { ALBUM } from "../data/album";
-import { plantSpriteSource } from "./plantSprites";
 import CoinIcon from "../../assets/icons/coin-icon.svg";
 import XpIcon from "../../assets/icons/xp-icon.svg";
+import SunIcon from "../../assets/icons/sun-icon.svg";
+import MoonIcon from "../../assets/icons/half-moon-icon.svg";
 import {
   SPECIES,
   speciesById,
@@ -39,14 +42,15 @@ import {
   randomSpeciesId,
   pick,
   POT_TIERS,
-  POT_TIER_ORDER,
   STAGE_LABEL,
   WATER_DRAIN,
   WATER_MAX,
   WATER_PER_TAP,
-  WATER_LABEL,
   BAD_LIGHT_BADGE_S,
+  BAD_LIGHT_DROOP_S,
   lightGap,
+  stageSeconds,
+  conditionFactor,
   type Request,
   type TraitKey,
   type PotTier,
@@ -61,11 +65,10 @@ const HIT_R = 70;
 const SNAP_R = 120;
 const PATIENCE_SEC = 45;
 const CUSTOMERS_PER_DAY = 20;
-// Serve flow (open): tap a plant -> it presents HERE (fraction of screen,
-// hovering in front of the counter, right of the customer); drag it the short
-// hop into the customer to serve. The watering can tool sits at CAN_POS.
-const PRESENT_POS = { x: 0.48, y: 0.54 };
-const CAN_POS = { x: 0.55, y: 0.66 };
+// Serve flow (open): tap a plant -> it presents at PRESENT_POS (OpenShop);
+// drag it the short hop into the customer to serve. The watering can tool
+// sits at CAN_POS.
+const CAN_POS = { x: 0.925, y: 0.855 };
 const CAN_R = 58; // tap radius for the can
 
 interface Customer {
@@ -102,6 +105,7 @@ export function ShopScene() {
   const { width: W, height: H } = useWindowDimensions();
   const L = layout(W, H);
   const bg = useImage(require("../../assets/background/background.png"));
+  const bgNight = useImage(require("../../assets/background/background_night.png"));
 
   const clock = useSharedValue(0);
   const dragId = useSharedValue<string | null>(null);
@@ -549,14 +553,6 @@ export function ShopScene() {
     setPresentedId(null);
   }
 
-  // Water the presented plant in place (it stays presented for serving).
-  function waterPresented() {
-    const pid = presentedIdSv.value;
-    if (!pid || !pots.value[pid]) return;
-    spawnBurst(parts, clock.value, W * PRESENT_POS.x, H * PRESENT_POS.y - 70, "#7fc8f2");
-    handleWater(pid);
-  }
-
   function bumpTick() {
     setTick((t) => t + 1);
   }
@@ -586,7 +582,7 @@ export function ShopScene() {
         // one tier out = half, two+ out = paused (the plant waits, no death)
         if (stage < 2 && water > 0 && !waterlogged) {
           const speed = gap === 0 ? 1 : gap === 1 ? 0.5 : 0;
-          growth += speed / 25;
+          growth += speed / stageSeconds(sp);
           if (growth >= 1) {
             growth = 0;
             stage = (stage + 1) as 0 | 1 | 2;
@@ -666,7 +662,7 @@ export function ShopScene() {
         // 2. Holding the can: taps water plants.
         if (canOnSv.value) {
           if (hitId) {
-            spawnBurst(parts, clock.value, e.x, e.y, "#7fc8f2");
+            spawnBurst(parts, clock.value, e.x, e.y, theme.colors.water);
             runOnJS(handleWater)(hitId);
           }
           return;
@@ -798,11 +794,13 @@ export function ShopScene() {
             }
             if (stars > 0) {
               const sp = speciesById(sid);
+              const droop = p.water > 1 || p.badLight >= BAD_LIGHT_DROOP_S;
               const price = Math.round(
                 sp.sell *
                   [0, 0.5, 0.75, 1][stars] *
                   [0.3, 0.6, 1][p.stage] *
-                  (1 + POT_TIERS[p.pot].bonus)
+                  (1 + POT_TIERS[p.pot].bonus) *
+                  conditionFactor(p.stage, p.water, droop)
               );
               spawnBurst(parts, clock.value, e.x, e.y - 30);
               runOnJS(handleSale)(did, stars, price);
@@ -826,7 +824,7 @@ export function ShopScene() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anyModalOpen, slots]);
 
-  const pipColor = patience > 0.5 ? "#4caf50" : patience > 0.25 ? "#ffb300" : "#e53935";
+  const pipColor = patience > 0.5 ? theme.colors.success : patience > 0.25 ? theme.colors.warning : theme.colors.danger;
   const potBySlot: Record<number, string> = {};
   for (const id in pots.value) potBySlot[pots.value[id].slot] = id;
   const totalInv = Object.values(inventory).reduce((a, b) => a + b, 0);
@@ -840,7 +838,7 @@ export function ShopScene() {
   // While dragging in closed phase, slot markers tint by light match for the
   // dragged species: green = in range, amber = one tier out, red = far out.
   const dragSp = dragPid && pots.value[dragPid] ? speciesById(pots.value[dragPid].speciesId) : null;
-  const GAP_TINT = ["#43a047", "#f0a500", "#d43a2f"];
+  const GAP_TINT = [theme.colors.success, theme.colors.warning, theme.colors.danger];
   const spriteMood: CustomerMood =
     customer?.mood === "happy" ? "happy" : customer?.mood === "angry" ? "upset" : "neutral";
 
@@ -849,7 +847,7 @@ export function ShopScene() {
       <GestureDetector gesture={gesture}>
         <View style={styles.fill}>
           <Canvas style={styles.fill}>
-            <SkImage image={bg} x={0} y={0} width={W} height={H} fit="cover" />
+            <SkImage image={phase === "open" ? bg : bgNight} x={0} y={0} width={W} height={H} fit="cover" />
             {/* zone shelves (furniture) — plants sit on their slots above */}
             {ZONES.map((zone) => {
               const placed = zoneShelves[zone.id];
@@ -888,36 +886,25 @@ export function ShopScene() {
           </Canvas>
 
           {/* dialogue bubble */}
-          {customer && (
-            <View pointerEvents="none" style={[styles.bubble, { top: H * 0.08, left: W * 0.04, width: W * 0.46 }]}>
-              <Text style={styles.bubbleText}>{customer.note ?? requestText(customer.request)}</Text>
-              {customer.mood === "waiting" && (
-                <View style={styles.pips}>
-                  {Array.from({ length: 10 }).map((_, i) => (
-                    <View
-                      key={i}
-                      style={[
-                        styles.pip,
-                        { backgroundColor: i < Math.ceil(patience * 10) ? pipColor : "#e8e0d4" },
-                      ]}
-                    />
-                  ))}
-                </View>
-              )}
-            </View>
-          )}
+          <CustomerBubble W={W} H={H} customer={customer} patience={patience} pipColor={pipColor} />
 
           {/* top bar: phase controls (left), day (center), coins (right) */}
-          <View pointerEvents="none" style={[styles.dayPill, { top: H * 0.03 }]}>
-            <Text style={styles.dayText}>
-              Day {day} • {phase === "open" ? `Open ${servedCount}/${CUSTOMERS_PER_DAY}` : "Closed"}
-            </Text>
-          </View>
-          <View pointerEvents="none" style={[styles.coins, { top: H * 0.03, flexDirection: "row", alignItems: "center" }]}>
-            <CoinIcon width={16} height={16} />
-            <Text style={styles.coinText}> {coins} · </Text>
-            <XpIcon width={16} height={16} />
-            <Text style={styles.coinText}> {hearts}</Text>
+          {/* top bar: 3 centered pills — day / coins / hearts */}
+          <View pointerEvents="none" style={[styles.topBar, { top: H * 0.03 }]}>
+            <View style={styles.dayPill}>
+              {phase === "open" ? <SunIcon width={20} height={20} /> : <MoonIcon width={20} height={20} />}
+              <Text style={styles.dayText}>
+                Day {day} • {phase === "open" ? "Open" : "Closed"}
+              </Text>
+            </View>
+            <View style={styles.coins}>
+              <CoinIcon width={20} height={20} />
+              <Text style={styles.coinText}> {coins}</Text>
+            </View>
+            <View style={styles.coins}>
+              <XpIcon width={20} height={20} />
+              <Text style={styles.coinText}> {hearts}</Text>
+            </View>
           </View>
           {/* watering mode banner: unmistakable, so taps never surprise */}
           {canMode && (
@@ -925,22 +912,36 @@ export function ShopScene() {
               <Text style={styles.wateringText}>💧 Watering — tap plants, tap the can to put it away</Text>
             </View>
           )}
-          {/* design panel toggle (closed only) */}
-          {phase === "closed" && !daySummary && (
-            <TouchableOpacity
-              style={[styles.decorateBtn, { top: H * 0.11 }]}
-              onPress={() => setShelfPanelOpen(true)}
-            >
-              <Text style={styles.supplierText}>🎨 Design</Text>
-            </TouchableOpacity>
-          )}
-          {/* album toggle (closed only) */}
-          {phase === "closed" && !daySummary && (
-            <TouchableOpacity
-              style={[styles.decorateBtn, { top: H * 0.19 }]}
-              onPress={() => setAlbumOpen(true)}
-            >
-              <Text style={styles.supplierText}>📖 Album</Text>
+          {/* top-left menu: 3 columns of icon buttons (Ngoc's icon art) */}
+          <View style={[styles.menuRow, { top: H * 0.03 }]}>
+            {phase === "closed" ? (
+              <TouchableOpacity style={styles.menuBtn} onPress={() => setSupplierOpen(true)}>
+                <Image source={require("../../assets/icons/shopping-icon.png")} style={styles.menuIcon} />
+                <Text style={styles.menuLabel}>Shop{totalInv > 0 ? ` (${totalInv})` : ""}</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.customerPill}>
+                <Image source={require("../../assets/icons/happy-face-icon.png")} style={styles.customerIcon} />
+                <Text style={styles.coinText}>{servedCount}/{CUSTOMERS_PER_DAY}</Text>
+              </View>
+            )}
+            {phase === "closed" && !daySummary && (
+              <TouchableOpacity style={styles.menuBtn} onPress={() => setShelfPanelOpen(true)}>
+                <Image source={require("../../assets/icons/interior-design-icon.png")} style={styles.menuIcon} />
+                <Text style={styles.menuLabel}>Design</Text>
+              </TouchableOpacity>
+            )}
+            {phase === "closed" && !daySummary && (
+              <TouchableOpacity style={styles.menuBtn} onPress={() => setAlbumOpen(true)}>
+                <Image source={require("../../assets/icons/album-icon.png")} style={styles.menuIcon} />
+                <Text style={styles.menuLabel}>Album</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {/* close-shop button: upper right corner (open phase only) */}
+          {phase === "open" && (
+            <TouchableOpacity style={[styles.closeCorner, { top: H * 0.03 }]} onPress={closeShop}>
+              <Text style={styles.closeCornerText}>Close</Text>
             </TouchableOpacity>
           )}
           {/* shelf hint toast (e.g. "Clear the shelf first!") */}
@@ -949,22 +950,9 @@ export function ShopScene() {
               <Text style={styles.wateringText}>{shelfHint}</Text>
             </View>
           )}
-          {phase === "closed" ? (
-            <TouchableOpacity style={[styles.supplierBtn, { top: H * 0.03 }]} onPress={() => setSupplierOpen(true)}>
-              <Text style={styles.supplierText}>🛒 Shop{totalInv > 0 ? ` (${totalInv})` : ""}</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={[styles.supplierBtn, { top: H * 0.03 }]} onPress={closeShop}>
-              <Text style={styles.supplierText}>Close</Text>
-            </TouchableOpacity>
-          )}
 
           {/* open-shop button (closed phase) */}
-          {phase === "closed" && !daySummary && (
-            <TouchableOpacity style={[styles.openBtn, { top: H * 0.12 }]} onPress={openShop}>
-              <Text style={styles.openText}>☀️ Open Shop</Text>
-            </TouchableOpacity>
-          )}
+          <OpenShopButton show={phase === "closed" && !daySummary} onOpen={openShop} top={H * 0.12} />
 
           {/* shelf name markers */}
           {slots.map((s, i) => {
@@ -1004,7 +992,7 @@ export function ShopScene() {
                 style={[
                   styles.alert,
                   { left: s.x - 13, top: s.y - 178 },
-                  waterlogged && { backgroundColor: "#1c6dd9" },
+                  waterlogged && { backgroundColor: theme.colors.waterlogged },
                 ]}
               >
                 <Text style={styles.alertText}>!</Text>
@@ -1045,23 +1033,14 @@ export function ShopScene() {
                   style={[
                     styles.gaugeFill,
                     { height: Math.max(2, 66 * Math.min(p.water, 1)) },
-                    p.water > 1 ? { backgroundColor: "#1c5d99" } : null,
+                    p.water > 1 ? { backgroundColor: theme.colors.waterlogged } : null,
                   ]}
                 />
               </View>
             ))}
 
           {/* presented plant: name + stage pill at the spot */}
-          {presentedId && presentedPlant && (
-            <View
-              pointerEvents="none"
-              style={[styles.presentPill, { left: W * PRESENT_POS.x - 60, top: H * PRESENT_POS.y + 62, width: 120 }]}
-            >
-              <Text style={styles.presentText}>
-                {speciesById(presentedPlant.speciesId).name} • {STAGE_LABEL[presentedPlant.stage]}
-              </Text>
-            </View>
-          )}
+          <PresentedPill W={W} H={H} presentedPlant={presentedPlant} />
 
           {/* empty-slot "+" markers (closed phase): tap to plant from inventory */}
           {phase === "closed" &&
@@ -1088,369 +1067,124 @@ export function ShopScene() {
 
       {/* modals live OUTSIDE the GestureDetector — inside it, the scene's Pan
           handler swallows drags, so a modal ScrollView can never scroll */}
-      {/* supplier modal */}
-      {supplierOpen && (
-        <View style={styles.backdrop}>
-          <Pressable style={styles.backdropTap} onPress={() => setSupplierOpen(false)} />
-          <View style={[styles.modal, { width: W * 0.6 }]}>
-              <ScrollView style={{ maxHeight: H * 0.55 }}>
-                <View style={styles.shopGrid}>
-                  {SPECIES.map((sp) => {
-                    const src = plantSpriteSource(sp.id, "sprout-healthy");
-                    const own = inventory[sp.id] ?? 0;
-                    return (
-                      <View key={sp.id} style={styles.shopCell}>
-                        <View style={styles.shopImgWrap}>
-                          {src ? (
-                            <Image source={src} style={styles.shopImg} resizeMode="contain" />
-                          ) : (
-                            <Text style={styles.shopEmoji}>🌱</Text>
-                          )}
-                          {own > 0 && (
-                            <View style={styles.shopBadge}>
-                              <Text style={styles.shopBadgeText}>{own}</Text>
-                            </View>
-                          )}
-                        </View>
-                        <TouchableOpacity
-                          style={[styles.shopBuyBtn, coins < sp.buy && styles.disabledBtn]}
-                          onPress={() => buyPlant(sp.id)}
-                          disabled={coins < sp.buy}
-                        >
-                          <View style={styles.iconRow}>
-                            <CoinIcon width={13} height={13} />
-                            <Text style={styles.buyText}> {sp.buy}</Text>
-                          </View>
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  })}
-                </View>
-              </ScrollView>
-              <TouchableOpacity style={styles.closeBtn} onPress={() => setSupplierOpen(false)}>
-                <Text style={styles.closeText}>Close</Text>
-              </TouchableOpacity>
-              {totalInv > 0 && (
-                <Text style={styles.hint}>Tap an empty shelf (+) to plant your purchases!</Text>
-              )}
-          </View>
-        </View>
-      )}
 
-          {/* shelves panel: one shelf per light zone (an upgrade) */}
-          {shelfPanelOpen && (
-            <View style={styles.backdrop}>
-              <View style={[styles.modal, { width: W * 0.72 }]}>
-                <Text style={styles.modalTitle}>🎨 Design</Text>
-                <ScrollView style={{ maxHeight: H * 0.55 }} showsVerticalScrollIndicator={false}>
-                {ZONES.map((zone) => {
-                  const placed = zoneShelves[zone.id];
-                  const curName = placed ? shelfById(placed.defId).name : zone.starterName;
-                  const curSlots = placed ? shelfById(placed.defId).slots.length : zone.starter.length;
-                  const occupied = zoneHasPlants(zone.id);
-                  const storageTypes = [...new Set(shelfStorage)];
-                  return (
-                    <View key={zone.id} style={styles.zoneBlock}>
-                      <Text style={styles.rowName}>
-                        {zone.name} · {zone.lightLabel} · Lv{zone.light}
-                      </Text>
-                      <Text style={styles.rowSub}>
-                        Now: {curName} • {curSlots} spots
-                        {occupied ? " • plants here — move them off to change" : ""}
-                      </Text>
-                      <View style={styles.zoneBtns}>
-                        {storageTypes.map((defId) => (
-                          <TouchableOpacity
-                            key={defId}
-                            style={styles.zoneBtn}
-                            onPress={() => assignShelfToZone(zone.id, defId)}
-                          >
-                            <Text style={styles.zoneBtnText}>Use {shelfById(defId).name}</Text>
-                          </TouchableOpacity>
-                        ))}
-                        {placed && (
-                          <TouchableOpacity
-                            style={styles.zoneBtn}
-                            onPress={() => removeShelfFromZone(zone.id)}
-                          >
-                            <Text style={styles.zoneBtnText}>Remove</Text>
-                          </TouchableOpacity>
-                        )}
-                        {storageTypes.length === 0 && !placed && (
-                          <Text style={styles.hint}>Buy a shelf from the supplier to upgrade.</Text>
-                        )}
-                      </View>
-                    </View>
-                  );
-                })}
-                <Text style={styles.sectionLabel}>Buy shelves:</Text>
-                {SHELF_DEFS.map((def) => {
-                  const inStorage = shelfStorage.filter((d) => d === def.id).length;
-                  return (
-                    <View key={def.id} style={styles.row}>
-                      <Text style={styles.rowName}>{def.name}</Text>
-                      <Text style={styles.rowSub}>{def.blurb} • </Text>
-                      <CoinIcon width={12} height={12} />
-                      <Text style={styles.rowSub}>
-                        {def.price}
-                        {inStorage > 0 && ` • in storage ${inStorage}`}
-                      </Text>
-                      <TouchableOpacity
-                        style={[styles.buyBtn, coins < def.price && styles.disabledBtn]}
-                        onPress={() => buyShelf(def.id)}
-                        disabled={coins < def.price}
-                      >
-                        <Text style={styles.buyText}>Buy</Text>
-                      </TouchableOpacity>
-                    </View>
-                  );
-                })}
-                </ScrollView>
-                <TouchableOpacity style={styles.closeBtn} onPress={() => setShelfPanelOpen(false)}>
-                  <Text style={styles.closeText}>Close</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
+      <ClosedModals
+        W={W}
+        H={H}
+        supplierOpen={supplierOpen}
+        onCloseSupplier={() => setSupplierOpen(false)}
+        inventory={inventory}
+        coins={coins}
+        totalInv={totalInv}
+        onBuyPlant={buyPlant}
+        shelfPanelOpen={shelfPanelOpen}
+        onCloseDesign={() => setShelfPanelOpen(false)}
+        zoneShelves={zoneShelves}
+        shelfStorage={shelfStorage}
+        zoneHasPlants={zoneHasPlants}
+        onAssignShelf={assignShelfToZone}
+        onRemoveShelf={removeShelfFromZone}
+        onBuyShelf={buyShelf}
+        slotModal={slotModal}
+        onCloseSlot={() => setSlotModal(null)}
+        placePot={placePot}
+        onSelectPot={setPlacePot}
+        onPlacePlant={placePlant}
+        albumOpen={albumOpen}
+        onCloseAlbum={() => setAlbumOpen(false)}
+        unlocked={unlocked}
+        hearts={hearts}
+        onUnlock={unlockSpecies}
+        daySummary={daySummary}
+        onCloseSummary={() => setDaySummary(null)}
+        day={day}
+      />
 
-          {/* slot modal: plant into an empty slot (tap a "+" while closed) */}
-          {slotModal !== null && (
-            <View style={styles.backdrop}>
-              <View style={[styles.modal, { width: W * 0.6 }]}>
-                <Text style={styles.modalTitle}>Empty Shelf</Text>
-                    {Object.entries(inventory).filter(([, c]) => c > 0).length === 0 && (
-                      <Text style={styles.hint}>No plants in stock — buy from the supplier!</Text>
-                    )}
-                    {Object.entries(inventory)
-                      .filter(([, c]) => c > 0)
-                      .map(([sid, count]) => (
-                        <View key={sid} style={styles.row}>
-                          <Text style={styles.rowName}>
-                            {speciesById(sid).name} ×{count} · ☀{speciesById(sid).lightMin}–{speciesById(sid).lightMax} · 💧{WATER_LABEL[speciesById(sid).water]}
-                          </Text>
-                          <TouchableOpacity
-                            style={styles.buyBtn}
-                            onPress={() => placePlant(slotModal, sid, placePot)}
-                          >
-                            <Text style={styles.buyText}>Plant</Text>
-                          </TouchableOpacity>
-                        </View>
-                      ))}
-                    <Text style={styles.sectionLabel}>Pot:</Text>
-                    <View style={styles.potRow}>
-                      {POT_TIER_ORDER.map((t) => (
-                        <TouchableOpacity
-                          key={t}
-                          style={[styles.potChip, placePot === t && styles.potChipSel]}
-                          onPress={() => setPlacePot(t)}
-                        >
-                          <View style={styles.iconRow}>
-                            <Text style={styles.potChipText}>{POT_TIERS[t].name}{POT_TIERS[t].price > 0 ? " " : " free "}</Text>
-                            {POT_TIERS[t].price > 0 && (
-                              <>
-                                <CoinIcon width={12} height={12} />
-                                <Text style={styles.potChipText}>{POT_TIERS[t].price}</Text>
-                              </>
-                            )}
-                            <Text style={styles.potChipText}> (+{Math.round(POT_TIERS[t].bonus * 100)}%)</Text>
-                          </View>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                <TouchableOpacity style={styles.closeBtn} onPress={() => setSlotModal(null)}>
-                  <Text style={styles.closeText}>Close</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
 
-          {/* album: the collection — hearts unlock, coins buy (in the Shop) */}
-          {albumOpen && (
-            <View style={styles.backdrop}>
-              <Pressable style={styles.backdropTap} onPress={() => setAlbumOpen(false)} />
-              <View style={[styles.modal, { width: W * 0.62 }]}>
-                <Text style={styles.modalTitle}>📖 Album</Text>
-                <View style={styles.hintRow}>
-                  <Text style={styles.hint}>{ALBUM.filter((a) => unlocked[a.slug]).length}/{ALBUM.length} collected · </Text>
-                  <XpIcon width={12} height={12} />
-                  <Text style={styles.hint}> {hearts} — happy customers earn hearts; hearts unlock plants here, coins buy them in the Shop</Text>
-                </View>
-                <ScrollView style={{ maxHeight: H * 0.55 }} showsVerticalScrollIndicator={false}>
-                  {ALBUM.map((a) => {
-                    const isOpen = !!unlocked[a.slug];
-                    return (
-                      <View key={a.slug} style={styles.row}>
-                        <View style={[styles.albumDot, isOpen ? styles.albumDotOpen : styles.albumDotLocked]} />
-                        <Text style={styles.rowName}>{a.name}</Text>
-                        <Text style={styles.rowSub}>
-                          {`${a.scientific} • ☀${a.lightMin}–${a.lightMax} • 💧${WATER_LABEL[a.water]}${a.playable ? " • in the Shop" : ""}`}
-                        </Text>
-                        {!isOpen && (
-                          <TouchableOpacity
-                            style={[styles.buyBtn, hearts < a.hearts && styles.disabledBtn]}
-                            onPress={() => unlockSpecies(a.slug, a.hearts)}
-                            disabled={hearts < a.hearts}
-                          >
-                            <View style={styles.iconRow}>
-                              <XpIcon width={13} height={13} />
-                              <Text style={styles.buyText}> {a.hearts}</Text>
-                            </View>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    );
-                  })}
-                </ScrollView>
-                <TouchableOpacity style={styles.closeBtn} onPress={() => setAlbumOpen(false)}>
-                  <Text style={styles.closeText}>Close</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {/* day summary */}
-          {daySummary && (
-            <View style={styles.backdrop}>
-              <View style={[styles.modal, { width: W * 0.5, alignItems: "center" }]}>
-                <Text style={styles.modalTitle}>Day {day - 1} complete!</Text>
-                <View style={styles.iconRow}>
-                  <Text style={styles.rowSub}>+</Text>
-                  <CoinIcon width={13} height={13} />
-                  <Text style={styles.rowSub}>
-                    {daySummary.coins} • 😊 {daySummary.happy} • 😞 {daySummary.angry}
-                  </Text>
-                </View>
-                <TouchableOpacity style={styles.openBtn2} onPress={() => setDaySummary(null)}>
-                  <Text style={styles.openText}>Prep for Day {day}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-      {/* presented plant: water it right here on the counter (outside the
-          GestureDetector so its taps never reach the scene Tap) */}
-      {presentedId && presentedPlant && presentedPlant.water < 1 && (
-        <TouchableOpacity
-          style={[styles.waterBtn, { left: W * PRESENT_POS.x + 84, top: H * PRESENT_POS.y - 96 }]}
-          onPress={waterPresented}
-        >
-          <Text style={styles.waterBtnText}>💧</Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  bubble: {
-    position: "absolute",
-    alignSelf: "center",
-    backgroundColor: "#fffdf8",
-    borderRadius: 14,
-    padding: 10,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  bubbleText: { fontSize: 15, fontFamily: "Cause_600SemiBold", color: "#4a3b2c", textAlign: "center" },
-  pips: { flexDirection: "row", marginTop: 6, gap: 3 },
-  pip: { width: 14, height: 8, borderRadius: 3 },
+  topBar: { position: "absolute", alignSelf: "center", flexDirection: "row", gap: 8 },
   dayPill: {
-    position: "absolute",
-    alignSelf: "center",
-    backgroundColor: "rgba(255,253,248,0.92)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: theme.colors.surfaceRaised,
     borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: theme.colors.outline,
     paddingHorizontal: 12,
-    paddingVertical: 6,
   },
-  dayText: { fontSize: 14, fontFamily: "Cause_700Bold", color: "#4a3b2c" },
+  dayText: { fontSize: 13, fontFamily: "Cause_700Bold", color: theme.colors.text },
   coins: {
-    position: "absolute",
-    right: 16,
-    backgroundColor: "#fffdf8",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: theme.colors.surfaceRaised,
     borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: theme.colors.outline,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 3,
   },
-  coinText: { fontSize: 16, fontFamily: "Cause_700Bold", color: "#4a3b2c" },
+  coinText: { fontSize: 13, fontFamily: "Cause_700Bold", color: theme.colors.text },
   supplierBtn: {
     position: "absolute",
     left: 16,
-    backgroundColor: "#fffdf8",
+    backgroundColor: theme.colors.surface,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  supplierText: { fontSize: 14, fontFamily: "Cause_700Bold", color: "#4a3b2c" },
-  openBtn: {
-    position: "absolute",
-    alignSelf: "center",
-    backgroundColor: "#ffb300",
-    borderRadius: 16,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  openText: { fontSize: 18, fontFamily: "Cause_700Bold", color: "#4a3b2c" },
-  openBtn2: {
-    backgroundColor: "#ffb300",
-    borderRadius: 14,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    marginTop: 12,
-  },
+  supplierText: { fontSize: 14, fontFamily: "Cause_700Bold", color: theme.colors.text },
   marker: {
     position: "absolute",
     width: 88,
-    backgroundColor: "rgba(93,63,39,0.85)",
+    backgroundColor: theme.colors.labelSurface,
     borderRadius: 6,
     paddingVertical: 2,
     alignItems: "center",
   },
-  markerText: { fontSize: 10, color: "#ffe9c4", fontFamily: "Cause_600SemiBold", textAlign: "center" },
+  markerText: { fontSize: 10, color: theme.colors.textInverse, fontFamily: "Cause_600SemiBold", textAlign: "center" },
   alert: {
     position: "absolute",
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: "#e53935",
+    backgroundColor: theme.colors.danger,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
+    shadowColor: theme.colors.shadow,
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 3,
   },
-  alertText: { fontSize: 16, fontFamily: "Cause_700Bold", color: "#fff" },
+  alertText: { fontSize: 16, fontFamily: "Cause_700Bold", color: theme.colors.onDanger },
   sunBadge: {
     position: "absolute",
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: "#f0a500",
+    backgroundColor: theme.colors.warning,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
+    shadowColor: theme.colors.shadow,
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 3,
   },
-  sunBadgeText: { fontSize: 14, fontFamily: "Cause_400Regular", color: "#fff" },
+  sunBadgeText: { fontSize: 14, fontFamily: "Cause_400Regular", color: theme.colors.onWarning },
   lightHint: {
     position: "absolute",
     width: 110,
-    backgroundColor: "rgba(240,165,0,0.92)",
+    backgroundColor: theme.colors.warningSurface,
     borderRadius: 6,
     paddingVertical: 2,
     alignItems: "center",
   },
-  lightHintText: { fontSize: 10, color: "#fff", fontFamily: "Cause_700Bold", textAlign: "center" },
+  lightHintText: { fontSize: 10, color: theme.colors.onWarning, fontFamily: "Cause_700Bold", textAlign: "center" },
   emptySlot: {
     position: "absolute",
     width: 48,
@@ -1458,173 +1192,82 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 2,
     borderStyle: "dashed",
-    borderColor: "rgba(255,253,248,0.75)",
+    borderColor: theme.colors.emptyOutline,
     alignItems: "center",
     justifyContent: "center",
   },
-  emptyText: { fontSize: 26, fontFamily: "Cause_700Bold", color: "rgba(255,253,248,0.9)" },
-  backdrop: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: "rgba(30,20,12,0.55)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  backdropTap: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
-  modal: {
-    backgroundColor: "#fffdf8",
-    borderRadius: 16,
-    padding: 16,
-    maxHeight: "85%",
-  },
-  modalTitle: { fontSize: 18, fontFamily: "Cause_700Bold", color: "#4a3b2c", marginBottom: 4 },
-  modalCoins: { fontSize: 14, fontFamily: "Cause_700Bold", color: "#4a3b2c", marginBottom: 8 },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee5d5",
-  },
-  rowName: { flex: 1, fontSize: 14, fontFamily: "Cause_600SemiBold", color: "#4a3b2c" },
-  rowSub: { fontSize: 12, fontFamily: "Cause_400Regular", color: "#8a7a64", marginRight: 8 },
-  buyBtn: {
-    backgroundColor: "#4caf50",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  disabledBtn: { backgroundColor: "#bdbdbd" },
-  buyText: { fontSize: 14, fontFamily: "Cause_700Bold", color: "#fff" },
-  closeBtn: {
-    marginTop: 12,
-    alignItems: "center",
-    backgroundColor: "#eee5d5",
-    borderRadius: 10,
-    paddingVertical: 8,
-  },
-  closeText: { fontSize: 14, fontFamily: "Cause_700Bold", color: "#4a3b2c" },
-  hint: { fontSize: 13, fontFamily: "Cause_400Regular", color: "#8a7a64", marginVertical: 8 },
-  sectionLabel: { fontSize: 13, fontFamily: "Cause_700Bold", color: "#4a3b2c", marginTop: 10, marginBottom: 6 },
-  iconRow: { flexDirection: "row", alignItems: "center" },
-  hintRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "center" },
-  shopGrid: { flexDirection: "row", flexWrap: "wrap" },
-  shopCell: { width: "20%", height: 124, alignItems: "center", paddingVertical: 8 },
-  shopImgWrap: { width: 58, height: 77 },
-  shopImg: { width: 58, height: 77 },
-  shopEmoji: { fontSize: 40, width: 58, height: 77, textAlign: "center" },
-  shopBadge: {
-    position: "absolute",
-    top: -4,
-    right: -10,
-    backgroundColor: "#e05252",
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 5,
-  },
-  shopBadgeText: { color: "#fff", fontSize: 12, fontFamily: "Cause_700Bold" },
-  shopBuyBtn: {
-    backgroundColor: "#4caf50",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginTop: 4,
-  },
-  albumDot: { width: 30, height: 30, borderRadius: 15, marginRight: 10 },
-  albumDotOpen: { backgroundColor: "#7cb342" },
-  albumDotLocked: { backgroundColor: "#2e2a26" },
-  potRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  potChip: {
-    borderWidth: 1,
-    borderColor: "#d5c8b0",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  potChipSel: { backgroundColor: "#ffe9c4", borderColor: "#c9763f" },
-  potChipText: { fontSize: 12, fontFamily: "Cause_600SemiBold", color: "#4a3b2c" },
+  emptyText: { fontSize: 26, fontFamily: "Cause_700Bold", color: theme.colors.emptyText },
   slotGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
   slotCell: {
     width: 44,
     height: 44,
     borderRadius: 10,
-    backgroundColor: "#f3ecdd",
+    backgroundColor: theme.colors.surfaceMuted,
     alignItems: "center",
     justifyContent: "center",
   },
-  slotCellCur: { backgroundColor: "#ffe9c4" },
+  slotCellCur: { backgroundColor: theme.colors.selected },
   gauge: {
     position: "absolute",
     width: 10,
     height: 70,
     borderRadius: 5,
-    backgroundColor: "rgba(0,0,0,0.30)",
+    backgroundColor: theme.colors.gaugeTrack,
     justifyContent: "flex-end",
     overflow: "hidden",
   },
-  gaugeFill: { width: 10, backgroundColor: "#4aa3e0" },
-  presentPill: {
-    position: "absolute",
-    backgroundColor: "rgba(46,36,27,0.88)",
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    alignItems: "center",
-  },
-  presentText: { fontSize: 12, fontFamily: "Cause_700Bold", color: "#fff6e6" },
-  waterBtn: {
-    position: "absolute",
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: "#ffffff",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
-  },
-  waterBtnText: { fontSize: 22 },
+  gaugeFill: { width: 10, backgroundColor: theme.colors.water },
   wateringBanner: {
     position: "absolute",
     alignSelf: "center",
-    backgroundColor: "rgba(58,130,190,0.92)",
+    backgroundColor: theme.colors.utilitySurface,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  wateringText: { fontSize: 13, fontFamily: "Cause_700Bold", color: "#ffffff" },
+  wateringText: { fontSize: 13, fontFamily: "Cause_700Bold", color: theme.colors.onUtility },
   decorateBtn: {
     position: "absolute",
     left: 12,
-    backgroundColor: "rgba(255,253,248,0.92)",
+    backgroundColor: theme.colors.surfaceRaised,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    shadowColor: "#000",
+    shadowColor: theme.colors.shadow,
     shadowOpacity: 0.12,
     shadowRadius: 4,
     elevation: 3,
   },
-  zoneBlock: {
-    borderTopWidth: 1,
-    borderTopColor: "#eee3d2",
-    paddingVertical: 8,
+  customerPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: theme.colors.surfaceRaised,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: theme.colors.outline,
+    paddingHorizontal: 12,
+    paddingVertical: 3,
   },
-  zoneBtns: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-  zoneBtn: {
-    backgroundColor: "#7a9e7e",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  customerIcon: { width: 21, height: 21 },
+  closeCorner: {
+    position: "absolute",
+    right: 20,
+    backgroundColor: theme.colors.surfaceRaised,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: theme.colors.outline,
+    paddingHorizontal: 12,
+    paddingVertical: 3,
   },
-  zoneBtnText: { color: "#fff", fontFamily: "Cause_700Bold", fontSize: 12 },
+  closeCornerText: { fontSize: 13, fontFamily: "Cause_700Bold", color: theme.colors.text },
+  menuRow: { position: "absolute", left: 20, flexDirection: "row", gap: 5 },
+  menuBtn: {
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 48,
+    paddingVertical: 2,
+  },
+  menuIcon: { width: 30, height: 30 },
+  menuLabel: { fontSize: 10, fontFamily: "Cause_700Bold", color: theme.colors.text, marginTop: 1 },
 });

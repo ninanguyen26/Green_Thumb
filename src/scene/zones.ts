@@ -1,17 +1,50 @@
-export interface ZoneDef {
-  id: string;
-  name: string;
-  light: "low" | "medium" | "high";
-  bg: string;
-  shelf: string;
+// One fixed room: back wall (3 sections) + checkout counter at the bottom.
+// 8 slots: 6 wall shelves + 2 featured on the counter.
+
+export interface Slot {
+  x: number;
+  y: number;
+  zone: string;
 }
 
-// The shop is ONE fixed room, GPGP-style: everything visible at once.
-// Back wall = brick (left) | glass storefront (center) | timber (right),
-// plus the center court table in the foreground. No camera, no panning.
-export const ZONES: ZoneDef[] = [
-  { id: "brick", name: "Brick Wall", light: "low", bg: "#4a3a30", shelf: "#6b5546" },
-  { id: "glass", name: "Glass Storefront", light: "high", bg: "#8fb8cc", shelf: "#c4dde9" },
-  { id: "timber", name: "Timber Wall", light: "low", bg: "#33402f", shelf: "#4d6046" },
-  { id: "center", name: "Center Court", light: "medium", bg: "#c7a06b", shelf: "#e0c193" },
+export const WALL_SECTIONS = [
+  { name: "brick", x0: 0.0, x1: 0.3, color: "#8a5a44", label: "Brick Wall" },
+  { name: "glass", x0: 0.3, x1: 0.7, color: "#bcd8e8", label: "Glass Storefront" },
+  { name: "timber", x0: 0.7, x1: 1.0, color: "#6e4f35", label: "Timber Wall" },
 ];
+
+export interface RoomLayout {
+  wallBottom: number;
+  shelfY: number;
+  counterTop: number;
+  customerX: number;
+  customerHeadY: number;
+  dropZone: { x0: number; x1: number; y0: number; y1: number };
+}
+
+export function layout(W: number, H: number): RoomLayout {
+  return {
+    wallBottom: H * 0.6,
+    shelfY: H * 0.47,
+    counterTop: H * 0.78,
+    customerX: W * 0.5,
+    customerHeadY: H * 0.54,
+    // generous rect around the customer for serve drops; clear of all slots
+    dropZone: { x0: W * 0.4, x1: W * 0.6, y0: H * 0.45, y1: H * 0.8 },
+  };
+}
+
+export function buildSlots(W: number, H: number): Slot[] {
+  const L = layout(W, H);
+  return [
+    { x: W * 0.07, y: L.shelfY, zone: "brick" },
+    { x: W * 0.19, y: L.shelfY, zone: "brick" },
+    { x: W * 0.36, y: L.shelfY, zone: "glass" },
+    { x: W * 0.64, y: L.shelfY, zone: "glass" },
+    { x: W * 0.81, y: L.shelfY, zone: "timber" },
+    { x: W * 0.93, y: L.shelfY, zone: "timber" },
+    // featured slots on the counter
+    { x: W * 0.25, y: L.counterTop, zone: "counter" },
+    { x: W * 0.75, y: L.counterTop, zone: "counter" },
+  ];
+}

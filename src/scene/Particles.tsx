@@ -9,6 +9,7 @@ export interface Particle {
   t0: number; // clock time at spawn
   life: number;
   r: number;
+  color: string;
 }
 
 const MAX = 40;
@@ -20,7 +21,8 @@ export function spawnBurst(
   parts: SharedValue<Particle[]>,
   t0: number,
   x: number,
-  y: number
+  y: number,
+  color: string = "#ffe9a3"
 ) {
   "worklet";
   const fresh: Particle[] = [];
@@ -36,6 +38,7 @@ export function spawnBurst(
       t0,
       life,
       r: 3 + Math.random() * 3.5,
+      color,
     });
   }
   const alive = parts.value.filter((p) => t0 - p.t0 < p.life);
@@ -63,13 +66,14 @@ function Dot({
     return p.y0 + p.vy * t + 0.5 * GRAVITY * t * t;
   });
   const r = useDerivedValue(() => parts.value[index]?.r ?? 0);
+  const c = useDerivedValue(() => parts.value[index]?.color ?? "#ffe9a3");
   const opacity = useDerivedValue(() => {
     const p = parts.value[index];
     if (!p) return 0;
     const t = Math.max(0, clock.value - p.t0);
     return Math.max(0, Math.min(1, 1 - t / p.life));
   });
-  return <Circle cx={cx} cy={cy} r={r} opacity={opacity} color="#ffe9a3" />;
+  return <Circle cx={cx} cy={cy} r={r} opacity={opacity} color={c} />;
 }
 
 export function ParticleLayer({

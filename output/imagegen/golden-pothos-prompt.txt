@@ -1,0 +1,124 @@
+Create eight coordinated GOLDEN POTHOS plant sprites for a cozy plant-shop game.
+
+PLANT
+Common name: Golden pothos
+Scientific name: Epipremnum aureum
+Form: Standard golden-variegated houseplant.
+
+Botanical features:
+A trailing vine with alternating, pointed, heart-shaped leaves. Leaves have
+a shallow notch at the base and irregular golden-yellow streaks and patches
+over medium-green foliage. Slender green stems connect the leaves at visible
+nodes. Keep the familiar indoor form: entire, unbroken leaves with no splits
+or holes. No flowers, climbing pole, or trellis.
+
+The youngest plant has fewer, smaller leaves and a compact habit. As it grows,
+develop longer vines and more foliage. The mature plant has a full central
+cluster with several gracefully trailing vines. Preserve recognizable golden
+variegation across all stages.
+
+STYLE
+Use the attached images as drawing-style references:
+warm, charming hand-drawn illustration; slightly irregular medium-brown
+outlines; rounded organic shapes; muted sage, olive, and medium greens;
+soft golden-yellow variegation; restrained warm cream highlights.
+Simple flat colors with one subtle shadow tone.
+
+Match the readable flower illustration in the bouquet reference and the
+warm palette of the streetscape reference. Do not use the streetscape’s
+isometric perspective.
+
+Keep silhouettes and individual leaves readable at a small game size.
+No photorealism, glossy 3D rendering, harsh black outlines, gradients,
+or intricate leaf-vein detail.
+
+VIEW AND COMPOSITION
+Show isolated plants from the soil surface upward, viewed from the front
+with a slight view from above. Trailing vines may hang below the soil-surface
+anchor into transparent space.
+
+No pot, soil, exposed underground roots, ground, background, cast shadow,
+text, labels, borders, or interface elements. Transparent background.
+
+Use the same camera angle, lighting, outline thickness, and botanical
+identity throughout. Arrange exactly eight sprites in a four-column,
+two-row sheet with equal-sized cells and generous transparent gutters.
+
+Place the central stem-base / soil-surface anchor at exactly the same
+position in every cell, horizontally centered and approximately 65% down.
+Reserve the space below for trailing vines. Keep all foliage inside its
+cell with transparent padding.
+
+Keep a consistent world scale: sprouts should actually be smaller,
+not enlarged to fill their cells.
+
+TOP ROW — LEFT TO RIGHT
+
+1. SPROUT — HEALTHY
+A small established golden pothos juvenile with a short stem and two or
+three small, pointed, heart-shaped leaves. Fresh green foliage with a few
+subtle golden-yellow markings. Compact, upright, lively posture.
+Draw recognizable young pothos foliage, not generic seedling cotyledons.
+
+2. SPROUT — HALF DEAD
+The same juvenile as sprite 1, with corresponding stems and leaves.
+Leaves hang limply and curl inward slightly. One leaf has a dry brown tip
+and edge; foliage is duller, but some living green remains.
+Keep natural golden variegation distinct from brown damage.
+Visibly distressed but still alive.
+
+3. GROWING — HEALTHY
+An intermediate golden pothos with approximately six to eight heart-shaped
+leaves on a few developing vines. A modest central cluster with one or two
+short vines beginning to trail. Medium-green foliage with irregular golden
+patches and streaks. Fuller than the sprout but clearly smaller than mature.
+
+4. GROWING — THIRSTY
+The same plant structure and leaf arrangement as sprite 3.
+Leaf stalks and vine tips droop; leaves hang lower and curl inward gently.
+Foliage remains mostly green with its golden markings intact.
+Little or no brown damage and no major leaf loss.
+Clearly thirsty, but readily recoverable.
+
+BOTTOM ROW — LEFT TO RIGHT
+
+5. GROWING — HALF DEAD
+The same underlying plant as sprite 3.
+More pronounced drooping, limp vine tips, curled leaves, and several dry
+brown tips or edges. A small amount of foliage loss exposes a few nodes.
+Retain living green leaves and recognizable golden variegation.
+Clearly more distressed than the thirsty version, but still alive.
+
+6. MATURE — HEALTHY
+A lush, shop-ready golden pothos with approximately twelve to sixteen
+readable heart-shaped leaves. A full central cluster and several vines
+trailing naturally outward and down on both sides, with slight asymmetry.
+Leaves alternate along the vines and vary naturally in size and orientation.
+Rich green foliage with irregular golden-yellow marbling.
+No split leaves, holes, flowers, or climbing support.
+
+7. MATURE — THIRSTY
+The same mature plant as sprite 6, preserving its vines, leaf arrangement,
+and overall scale. Leaf stalks sag, leaves hang limply and curl slightly,
+and trailing vine tips lose their lively curve.
+Keep most foliage green, with golden variegation intact and minimal damage.
+Do not shrink the plant or remove large amounts of foliage.
+
+8. MATURE — HALF DEAD
+The same underlying mature plant as sprite 6.
+Pronounced wilting, curled and limp leaves, several brown tips and patches,
+and modest foliage loss that exposes sections of vine.
+Trailing stems remain attached and visibly alive.
+Retain enough green foliage to communicate that recovery is possible.
+Natural golden-yellow variegation must remain distinguishable from damage.
+
+CONSISTENCY
+Condition variants must look like the same individual plant changing health,
+not different specimens. Preserve corresponding stems, leaves, and
+variegation patterns wherever they remain present.
+
+Growth stages should develop through additional leaves and longer vines,
+not by simply scaling the same drawing.
+
+Do not include recovering or gone sprites; recovery will be animated in code.
+Do not draw warning icons, water droplets, sparkles, faces, or decorative props.

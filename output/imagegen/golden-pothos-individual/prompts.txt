@@ -1,0 +1,61 @@
+sprout-healthy
+
+Generate ONE isolated golden pothos (Epipremnum aureum) game sprite, ONE plant on ONE image, NOT a sheet or grid or comparison. Transparent background. Reference image is STYLE ONLY: emulate its bouquet's simple warm hand-drawn flat illustration, medium-brown slightly wobbly outlines, muted green and golden yellow, minimal flat shadow shapes. No realistic texture, gradient, glow, haze, cast shadow or backdrop. Heart-shaped pointed entire leaves, alternating on slender vines, green with irregular golden-yellow variegation. No split leaves or holes. INCLUDE a small flat horizontal oval of visible dark-brown potting SOIL at stem base, with a few simple lighter soil flecks. NO POT, no vessel, no ground plane or roots. Plant stems emerge visibly from the soil oval. Front view slightly from above. Square canvas, stem base and soil oval centered at x=50%, y=66%; soil oval width 28% canvas, height 7%. Transparent padding on all sides; full plant and any trailing vines fit. Same illustration scale and line weight in every stage. No text, icons, faces, props, UI. Growth and condition must read instantly in silhouette.
+
+Small young pothos, exactly 3 small leaves, short stems, occupies about 25% canvas height above soil. HEALTHY: upright petioles, crisp perked leaves, green with subtle gold, no brown injury.
+
+====================
+
+sprout-half-dead
+
+Generate ONE isolated golden pothos (Epipremnum aureum) game sprite, ONE plant on ONE image, NOT a sheet or grid or comparison. Transparent background. Reference image is STYLE ONLY: emulate its bouquet's simple warm hand-drawn flat illustration, medium-brown slightly wobbly outlines, muted green and golden yellow, minimal flat shadow shapes. No realistic texture, gradient, glow, haze, cast shadow or backdrop. Heart-shaped pointed entire leaves, alternating on slender vines, green with irregular golden-yellow variegation. No split leaves or holes. INCLUDE a small flat horizontal oval of visible dark-brown potting SOIL at stem base, with a few simple lighter soil flecks. NO POT, no vessel, no ground plane or roots. Plant stems emerge visibly from the soil oval. Front view slightly from above. Square canvas, stem base and soil oval centered at x=50%, y=66%; soil oval width 28% canvas, height 7%. Transparent padding on all sides; full plant and any trailing vines fit. Same illustration scale and line weight in every stage. No text, icons, faces, props, UI. Growth and condition must read instantly in silhouette.
+
+Small young pothos, 3 small leaves, short stems, juvenile scale. HALF DEAD: stems collapsed sideways toward soil, all leaves visibly limp/folded and hanging downward, one leaf shriveled, large dull brown dry edges on two leaves but some green alive. Strong visibly damaged silhouette.
+
+====================
+
+growing-healthy
+
+Generate ONE isolated golden pothos (Epipremnum aureum) game sprite, ONE plant on ONE image, NOT a sheet or grid or comparison. Transparent background. Reference image is STYLE ONLY: emulate its bouquet's simple warm hand-drawn flat illustration, medium-brown slightly wobbly outlines, muted green and golden yellow, minimal flat shadow shapes. No realistic texture, gradient, glow, haze, cast shadow or backdrop. Heart-shaped pointed entire leaves, alternating on slender vines, green with irregular golden-yellow variegation. No split leaves or holes. INCLUDE a small flat horizontal oval of visible dark-brown potting SOIL at stem base, with a few simple lighter soil flecks. NO POT, no vessel, no ground plane or roots. Plant stems emerge visibly from the soil oval. Front view slightly from above. Square canvas, stem base and soil oval centered at x=50%, y=66%; soil oval width 28% canvas, height 7%. Transparent padding on all sides; full plant and any trailing vines fit. Same illustration scale and line weight in every stage. No text, icons, faces, props, UI. Growth and condition must read instantly in silhouette.
+
+Intermediate pothos, 7 heart-shaped leaves, about 40% canvas height above soil, short developing vines. HEALTHY: lifted petioles and open leaves spreading upward and outward, compact perky central fan. No long mature trails or damage.
+
+====================
+
+growing-thirsty
+
+Generate ONE isolated golden pothos (Epipremnum aureum) game sprite, ONE plant on ONE image, NOT a sheet or grid or comparison. Transparent background. Reference image is STYLE ONLY: emulate its bouquet's simple warm hand-drawn flat illustration, medium-brown slightly wobbly outlines, muted green and golden yellow, minimal flat shadow shapes. No realistic texture, gradient, glow, haze, cast shadow or backdrop. Heart-shaped pointed entire leaves, alternating on slender vines, green with irregular golden-yellow variegation. No split leaves or holes. INCLUDE a small flat horizontal oval of visible dark-brown potting SOIL at stem base, with a few simple lighter soil flecks. NO POT, no vessel, no ground plane or roots. Plant stems emerge visibly from the soil oval. Front view slightly from above. Square canvas, stem base and soil oval centered at x=50%, y=66%; soil oval width 28% canvas, height 7%. Transparent padding on all sides; full plant and any trailing vines fit. Same illustration scale and line weight in every stage. No text, icons, faces, props, UI. Growth and condition must read instantly in silhouette.
+
+Intermediate pothos with 7 leaves, same size stems and leaf sizes as healthy growing plant. THIRSTY: pronounced downward collapse of every petiole, leaves point DOWN with folded inward edges, sharply bowed stems and limp tips. Crown is visibly compressed vertically and sags toward soil; short vines hang limply below soil line. Mostly green and gold, no major browning. Silhouette must be unmistakably WILTED, never upright/perky.
+
+====================
+
+growing-half-dead
+
+Generate ONE isolated golden pothos (Epipremnum aureum) game sprite, ONE plant on ONE image, NOT a sheet or grid or comparison. Transparent background. Reference image is STYLE ONLY: emulate its bouquet's simple warm hand-drawn flat illustration, medium-brown slightly wobbly outlines, muted green and golden yellow, minimal flat shadow shapes. No realistic texture, gradient, glow, haze, cast shadow or backdrop. Heart-shaped pointed entire leaves, alternating on slender vines, green with irregular golden-yellow variegation. No split leaves or holes. INCLUDE a small flat horizontal oval of visible dark-brown potting SOIL at stem base, with a few simple lighter soil flecks. NO POT, no vessel, no ground plane or roots. Plant stems emerge visibly from the soil oval. Front view slightly from above. Square canvas, stem base and soil oval centered at x=50%, y=66%; soil oval width 28% canvas, height 7%. Transparent padding on all sides; full plant and any trailing vines fit. Same illustration scale and line weight in every stage. No text, icons, faces, props, UI. Growth and condition must read instantly in silhouette.
+
+Intermediate pothos, originally 7 leaves now 5–6 remain. HALF DEAD: severe collapsed petioles and dangling tightly curled leaves, shriveled brown leaf at tip, brown dry patches covering about one third of foliage, exposed nodes. Weak living green/gold leaves remain. Clearly more severe damage than thirst.
+
+====================
+
+mature-healthy
+
+Generate ONE isolated golden pothos (Epipremnum aureum) game sprite, ONE plant on ONE image, NOT a sheet or grid or comparison. Transparent background. Reference image is STYLE ONLY: emulate its bouquet's simple warm hand-drawn flat illustration, medium-brown slightly wobbly outlines, muted green and golden yellow, minimal flat shadow shapes. No realistic texture, gradient, glow, haze, cast shadow or backdrop. Heart-shaped pointed entire leaves, alternating on slender vines, green with irregular golden-yellow variegation. No split leaves or holes. INCLUDE a small flat horizontal oval of visible dark-brown potting SOIL at stem base, with a few simple lighter soil flecks. NO POT, no vessel, no ground plane or roots. Plant stems emerge visibly from the soil oval. Front view slightly from above. Square canvas, stem base and soil oval centered at x=50%, y=66%; soil oval width 28% canvas, height 7%. Transparent padding on all sides; full plant and any trailing vines fit. Same illustration scale and line weight in every stage. No text, icons, faces, props, UI. Growth and condition must read instantly in silhouette.
+
+Mature pothos, 14 heart-shaped leaves, full lush upright central crown reaches near y=12%; 3 leafy vines trail outward and below soil oval toward y=88%. HEALTHY: lifted springy petioles, open broad leaves, lively full silhouette, irregular gold variegation, no damage. All leaves readable.
+
+====================
+
+mature-thirsty
+
+Generate ONE isolated golden pothos (Epipremnum aureum) game sprite, ONE plant on ONE image, NOT a sheet or grid or comparison. Transparent background. Reference image is STYLE ONLY: emulate its bouquet's simple warm hand-drawn flat illustration, medium-brown slightly wobbly outlines, muted green and golden yellow, minimal flat shadow shapes. No realistic texture, gradient, glow, haze, cast shadow or backdrop. Heart-shaped pointed entire leaves, alternating on slender vines, green with irregular golden-yellow variegation. No split leaves or holes. INCLUDE a small flat horizontal oval of visible dark-brown potting SOIL at stem base, with a few simple lighter soil flecks. NO POT, no vessel, no ground plane or roots. Plant stems emerge visibly from the soil oval. Front view slightly from above. Square canvas, stem base and soil oval centered at x=50%, y=66%; soil oval width 28% canvas, height 7%. Transparent padding on all sides; full plant and any trailing vines fit. Same illustration scale and line weight in every stage. No text, icons, faces, props, UI. Growth and condition must read instantly in silhouette.
+
+Mature pothos, 14 heart-shaped leaves and 3 long trailing vines. THIRSTY: severe obvious wilting without brown injury: central crown has sunk, ALL petioles bow sharply downward, leaf tips point to ground, leaves fold lengthwise and hang like limp fabric; trailing vines hang nearly vertically without springy arcs. Leaf sizes and vine lengths stay mature. Mostly green and gold, dense enough to recognize same plant. Must look visibly collapsed rather than healthy lush upright plant.
+
+====================
+
+mature-half-dead
+
+Generate ONE isolated golden pothos (Epipremnum aureum) game sprite, ONE plant on ONE image, NOT a sheet or grid or comparison. Transparent background. Reference image is STYLE ONLY: emulate its bouquet's simple warm hand-drawn flat illustration, medium-brown slightly wobbly outlines, muted green and golden yellow, minimal flat shadow shapes. No realistic texture, gradient, glow, haze, cast shadow or backdrop. Heart-shaped pointed entire leaves, alternating on slender vines, green with irregular golden-yellow variegation. No split leaves or holes. INCLUDE a small flat horizontal oval of visible dark-brown potting SOIL at stem base, with a few simple lighter soil flecks. NO POT, no vessel, no ground plane or roots. Plant stems emerge visibly from the soil oval. Front view slightly from above. Square canvas, stem base and soil oval centered at x=50%, y=66%; soil oval width 28% canvas, height 7%. Transparent padding on all sides; full plant and any trailing vines fit. Same illustration scale and line weight in every stage. No text, icons, faces, props, UI. Growth and condition must read instantly in silhouette.
+
+Mature pothos with 3 long trailing vines, 10–11 remaining leaves with bare sections and exposed nodes. HALF DEAD: severely limp hanging petioles, curled shriveled leaves, large tan/brown patches and crisp brown edges across about one third of foliage, one mostly brown leaf, a few surviving green/gold leaves. Crown collapsed, trailing tips weak. Clearly alive but badly damaged, distinct from green thirsty stage.

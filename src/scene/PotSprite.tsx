@@ -8,7 +8,7 @@ import {
   type SharedValue,
 } from "react-native-reanimated";
 import { RoundedRect, Circle, Image as SkImage, useImage } from "@shopify/react-native-skia";
-import { speciesById, POT_TIERS, type PotTier } from "../data/plants";
+import { speciesById, POT_TIERS, BAD_LIGHT_DROOP_S, type PotTier } from "../data/plants";
 import { PLANT_ART, plantSpriteKey, plantSpriteSource } from "./plantSprites";
 
 export interface PotData {
@@ -18,9 +18,10 @@ export interface PotData {
   slot: number; // home slot index
   phase: number; // sway phase so pots don't move in sync
   speciesId: string;
-  water: number; // 0..1
+  water: number; // 0..WATER_MAX ( > 1 = waterlogged)
   stage: 0 | 1 | 2; // sprout | growing | mature
   growth: number; // 0..1 progress to next stage
+  badLight: number; // seconds accumulated in far-bad light (growth paused)
   pot: PotTier;
 }
 
@@ -134,8 +135,9 @@ export function PotSprite({ id, pots, clock, dragId, dragDX, dragDY, dragScale, 
   // Which art (if any) + which sprite key. Recomputed on React re-render (tick-driven).
   const pd = pots.value[id];
   const art = pd ? PLANT_ART[pd.speciesId] : undefined;
+  const droop = pd ? pd.water > 1 || pd.badLight >= BAD_LIGHT_DROOP_S : false;
   const curSrc =
-    pd && art ? plantSpriteSource(pd.speciesId, plantSpriteKey(pd.stage, pd.water)) : null;
+    pd && art ? plantSpriteSource(pd.speciesId, plantSpriteKey(pd.stage, pd.water, droop)) : null;
 
   // Crossfade between states: keep the previous sprite and fade it out over
   // the new one. Keep both at full scale so the soil never shrinks or shifts.

@@ -119,13 +119,13 @@ Everything discussed and agreed on for the cozy plant shop game. Living doc.
 ## Build plan (RN) — revised 2026-10-19, tracked in PROGRESS.md
 
 0. Pilot classifier ✅
-1. 71-species content audit ✅ (seed JSON still to author: care, light tier, water, traits, growth)
+1. 71-species content audit ✅ (seed data authored 2026-10-20: plant-database.json, 41 species verified on thesill.com, APPROVED by Ngoc 2026-10-20; 30 fallback species cut by Ngoc; growth time stays global for V1)
 2. Scaffold (Expo + Skia) ✅ — this folder, one-room GPGP layout
 3. Customer loop (in progress): counter + customer + dialogue/patience + drag-to-serve + coins
 - **Tend (4a, built 2026-10-19):** water meter per plant (~60s drain) + 3 growth stages (sprout/growing/mature, ~25s/stage, only when watered). Tap plant = water (blue droplet burst). "!" attention marker: thirsty → water, root-bound → repot. Sell anytime: price scales with maturity (30%/60%/100%) — no mature-gate; selling babies at a loss emerges once buy prices exist (4b).
 - **Repot & pot sizes (4c, designed 2026-10-19, not built):** repot IS the stage-up (growth meter fills → root-bound "!" → repot to next size advances the stage); sizes 2"/4"/6" × tiers (Nursery/Terracotta/Ceramic/Designer); old pots return to a reusable stash; sale carries the current pot's bonus. Sequences after sprites land and the loop tests clean.
 5. Zone gameplay (light tiers matter)
-6. City + seasons
+6. City + seasons (ON HOLD 2026-10-20 — Ngoc)
 7. Chore fixes (self-watering pots, watering system, grow lights)
 8. Decoration + day/night
 9. Wire the scanner
@@ -141,6 +141,7 @@ V1 excludes: cultivar-level scanning, shop relocation, social, story.
   - Tap (closed): empty slot = place modal (inventory + pot choice); occupied slot = manage modal (info + move grid). The can = watering.
   - Tap (open): a plant = **select → it glides to the presentation spot** on the counter (front, enlarged 1.15×, name pill) = your confirmation. Tap it again (or empty space) = send it home. Tap another = swap.
   - **Watering can tool:** tap the can (on the counter, right end) to pick it up; taps then water plants (water gauges appear on every plant); tap the can again (or serve) to put it down. Infinite for V1 (no capacity/refill). The can is placeholder Skia art for Ngoc to replace.
+  - **Water needs are 3 categories, not seconds (Ngoc, 2026-10-20):** each species sits in one water group — low / medium / high — which sets how fast its meter drains and how much water it tolerates. **Overwatering makes a plant suffer too:** watering a plant that's already wet pushes it waterlogged — it droops (thirsty art), growth pauses, and it recovers as the meter drains back down. No death; the lesson is 'read the gauge before you tap', so spam-watering everything stops working.
   - A presented plant with water < 100% gets a **💧 button** by it — water in place, it stays presented.
 - **Serve (open): drag the PRESENTED plant the short hop to the customer.** Only the presented plant is draggable in open (others don't grab). Drop in the customer zone = graded/sale/refuse as before; wrong plant = refuse → it flies home. Drop elsewhere = back to the presentation spot. Drag stays for arranging in closed (drag to slot = move/swap).
 - Rationale: with interior design coming, plants will be small, scattered on shelves, and occluded by the customer/dialogue card. Precision-drag from anywhere breaks; **select → present → drag** keeps the tactile hand-over but the grab is always on a big plant in the open. Drag is the arrange verb (closed) and the hand-over verb (open), never a precision grab.
@@ -163,6 +164,18 @@ V1 excludes: cultivar-level scanning, shop relocation, social, story.
 - **Player flow:** closed phase → "🪑 Shelves" panel → per zone, "Use [shelf]" from storage or "Remove" (empty only). Buy shelves in the supplier. One Wall Ledge starts in storage so the upgrade flow is testable immediately (Showcase starts empty — a natural first upgrade).
 - Starter defs (`src/data/shelves.ts`, placeholder art in `src/scene/ShelfSprite.tsx`): Wall Ledge 25c / 2 slots, Tall Bookcase 90c / 6 slots, Display Stand 60c / 2 slots. Zone spots (cx/baseY fractions) are tunable against the background art.
 - Supersedes the earlier decorate-drag design (deleted 2026-10-20): decorate mode, shelf-tray drag, wall-interval overlap, door-blocking, and the validity footprint are all gone.
+
+## Zone gameplay — Step 5: light matters (locked 2026-10-20, built 2026-10-20)
+
+- **Principle:** light gates *growth* the way water gates health. Mature plants don't care — light is a growing-phase puzzle, solved once per plant, not a maintenance chore.
+- **Zone light levels (fixed 1–4):** Showcase 1 (low), Right Wall 2 (medium), Left Wall 3 (bright indirect), Window 4 (bright direct).
+- **Species light ranges** live in the plant database — 41 species verified on thesill.com 2026-10-20 (`~/workspace/plant-shop-game/plant-database.json` + `plant-database-review.md`; APPROVED by Ngoc 2026-10-20, not yet wired in; the 30 fallback species were cut by Ngoc, incl. Aloe Vera — The Sill doesn't stock it; aloe's game values stand as shipped). Starter 6 per The Sill: Golden Pothos 1–3, Snake Plant 1–4, Boston Fern 2–3, Monstera 2–3, Pilea 2–4. Water categories from the same check: Pothos medium, Monstera medium, Snake low, Pilea medium, Fern medium, Aloe low.
+- **Growth rule:** in range = full speed; 1 tier outside = half speed; 2+ outside = growth pauses (the plant waits; no death timer).
+- **Teaching:** sun icons on supplier rows + the place modal; while dragging in closed phase, slot markers tint green/yellow/red by light match; a growing plant stuck 60s+ in bad light (closed-phase time only — the counter freezes while the shop is open, when plants can't be moved) gets an amber sun badge (distinct from the red thirsty "!") and its pill says which way to move ("needs more light — try the window" / "too much sun — pull it back").
+- **Droop (Ngoc's call):** a plant left in bad light long enough visibly droops — reuses the thirsty art even when watered; moving it to good light recovers it in seconds. No light-based death.
+- **Grow lights stay in Step 7** (buy one per zone → that zone counts +1 light level).
+- **Cities ON HOLD (Ngoc, 2026-10-20):** Step 6 city/season differences are held — zone light is a fixed base level for now; no city/season modifier plumbing in Step 5.
+- **Out of scope:** sales/visibility bonuses per zone (parked).
 
 ## Plant sprite plan (2026-10-19)
 
@@ -214,6 +227,13 @@ V1 excludes: cultivar-level scanning, shop relocation, social, story.
 - **Sound + haptics on everything** — silent motion reads as app.
 - **Kill native-looking UI** — custom everything; iOS-default components are
   half of "app vibes".
+
+## Modals & economy (locked 2026-10-20, built 2026-10-20)
+
+- **Three modals, one job each:** **Shop** = buy plants only (shelves leave the supplier). **Album** = the plant collection: all **41 approved database species**. Locked entries keep a silhouette *picture* only — name, scientific name, light/water, and cost stay visible (hearts are spent here; a blind unlock would be a mystery-box purchase, which Ngoc flagged and rejected 2026-10-20). **Design** = all shelf business (buy / assign / remove — the shelves panel, renamed).
+- **Two currencies.** **Coins** buy things (plants, pots, interior). **Hearts** are earned from customer happiness (stars) and are **spent** to unlock Album entries — hearts go down on unlock, like coins. **Unlock ≠ own:** unlocking opens the species; buying the plant still costs coins in the Shop.
+- Scanner tie-in (Step 9): a wild claim unlocks its Album entry the free way, with the wild-specimen tag — the camera's payoff.
+- Draft numbers for the build (tunable): hearts per sale = stars (1/2/3♥); the 6 shop species start unlocked; unlock costs for the other 35 tier by rarity.
 
 ## Open questions
 

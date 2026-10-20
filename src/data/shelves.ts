@@ -92,6 +92,7 @@ export interface ZoneDef {
   id: string;
   name: string;
   lightLabel: string;
+  light: number; // 1 low .. 4 direct — gates growth vs species' tolerated band
   cx: number; // shelf anchor: the placed shelf is centered here (fraction of W)
   baseY: number; // shelf base line (fraction of H)
   starterName: string;
@@ -103,6 +104,7 @@ export const ZONES: ZoneDef[] = [
     id: "window",
     name: "Window",
     lightLabel: "Bright direct light",
+    light: 4,
     cx: 0.43,
     baseY: 0.56,
     starterName: "Window Sill",
@@ -115,6 +117,7 @@ export const ZONES: ZoneDef[] = [
     id: "left",
     name: "Left Wall",
     lightLabel: "Bright indirect light",
+    light: 3,
     cx: 0.15,
     baseY: 0.58,
     starterName: "Counter End",
@@ -127,6 +130,7 @@ export const ZONES: ZoneDef[] = [
     id: "right",
     name: "Right Wall",
     lightLabel: "Medium light",
+    light: 2,
     cx: 0.85,
     baseY: 0.62,
     starterName: "Floor Boards",
@@ -141,6 +145,7 @@ export const ZONES: ZoneDef[] = [
     id: "showcase",
     name: "Showcase",
     lightLabel: "Low light",
+    light: 1,
     cx: 0.56,
     baseY: 0.82,
     starterName: "Bare Floor",
@@ -152,4 +157,10 @@ export function zoneById(id: string): ZoneDef {
   const z = ZONES.find((zz) => zz.id === id);
   if (!z) throw new Error(`unknown zone ${id}`);
   return z;
+}
+
+export function zoneLight(id: string): number {
+  "worklet";
+  const z = ZONES.find((zz) => zz.id === id);
+  return z ? z.light : 2;
 }

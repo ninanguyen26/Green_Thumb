@@ -2,6 +2,8 @@
 
 export type TraitKey = "petSafe" | "easyCare" | "lowLight" | "brightLight";
 
+export type WaterNeed = "low" | "medium" | "high";
+
 export interface Species {
   id: string;
   name: string;
@@ -9,16 +11,47 @@ export interface Species {
   buy: number; // coins to buy from supplier
   sell: number; // coins when sold at full stars, mature, nursery pot
   traits: TraitKey[];
+  lightMin: number; // tolerated light band (1 low .. 4 direct), from plant-database.json (The Sill, 2026-10-20)
+  lightMax: number;
+  water: WaterNeed; // water group: sets drain speed + how much overwater it tolerates
 }
 
 export const SPECIES: Species[] = [
-  { id: "pothos", name: "Golden Pothos", leaf: "#43a047", buy: 10, sell: 20, traits: ["easyCare", "lowLight"] },
-  { id: "monstera", name: "Monstera", leaf: "#1b5e20", buy: 18, sell: 35, traits: ["easyCare"] },
-  { id: "snake", name: "Snake Plant", leaf: "#7cb342", buy: 13, sell: 25, traits: ["easyCare", "lowLight"] },
-  { id: "pilea", name: "Pilea", leaf: "#66bb6a", buy: 15, sell: 30, traits: ["petSafe", "easyCare"] },
-  { id: "fern", name: "Boston Fern", leaf: "#2e7d32", buy: 14, sell: 28, traits: ["petSafe", "lowLight"] },
-  { id: "aloe", name: "Aloe Vera", leaf: "#9ccc65", buy: 11, sell: 22, traits: ["easyCare", "brightLight"] },
+  { id: "pothos", name: "Golden Pothos", leaf: "#43a047", buy: 10, sell: 20, traits: ["easyCare", "lowLight"], lightMin: 1, lightMax: 3, water: "medium" },
+  { id: "monstera", name: "Monstera", leaf: "#1b5e20", buy: 18, sell: 35, traits: ["easyCare"], lightMin: 2, lightMax: 3, water: "medium" },
+  { id: "snake", name: "Snake Plant", leaf: "#7cb342", buy: 13, sell: 25, traits: ["easyCare", "lowLight"], lightMin: 1, lightMax: 4, water: "low" },
+  { id: "pilea", name: "Pilea", leaf: "#66bb6a", buy: 15, sell: 30, traits: ["petSafe", "easyCare"], lightMin: 2, lightMax: 4, water: "medium" },
+  { id: "fern", name: "Boston Fern", leaf: "#2e7d32", buy: 14, sell: 28, traits: ["petSafe", "lowLight"], lightMin: 2, lightMax: 3, water: "medium" },
+  { id: "aloe", name: "Aloe Vera", leaf: "#9ccc65", buy: 11, sell: 22, traits: ["easyCare", "brightLight"], lightMin: 3, lightMax: 4, water: "low" },
 ];
+
+// Seconds for a full meter to drain, by water group. (Tuned 2026-10-20:
+// the first pass at 90/60/40s made watering a constant chore.)
+export const WATER_DRAIN: Record<WaterNeed, number> = { low: 300, medium: 180, high: 120 };
+
+// Bad-light timing (accrues only while the shop is CLOSED — the arranging
+// phase; frozen while open, when plants can't be moved): badge + hint at
+// 60s, droop at 180s.
+export const BAD_LIGHT_BADGE_S = 60;
+export const BAD_LIGHT_DROOP_S = 180;
+
+// How far past full the meter can go before watering is refused, by group.
+// Water > 1 = waterlogged: droops (thirsty art), growth pauses, recovers as it drains.
+export const WATER_MAX: Record<WaterNeed, number> = { low: 1.25, medium: 1.4, high: 1.6 };
+
+// Each watering adds this much. Two taps from empty = full.
+export const WATER_PER_TAP = 0.5;
+
+// Light gap between a species and a zone level: 0 = in range (full growth),
+// 1 = one tier out (half speed), 2+ = too far (growth pauses). Worklet-safe.
+export function lightGap(sp: Species, zoneLight: number): number {
+  "worklet";
+  if (zoneLight >= sp.lightMin && zoneLight <= sp.lightMax) return 0;
+  if (zoneLight < sp.lightMin) return Math.min(2, sp.lightMin - zoneLight);
+  return Math.min(2, zoneLight - sp.lightMax);
+}
+
+export const WATER_LABEL: Record<WaterNeed, string> = { low: "low", medium: "med", high: "high" };
 
 export function speciesById(id: string): Species {
   "worklet";

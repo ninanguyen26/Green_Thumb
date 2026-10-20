@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, View, Text, TouchableOpacity, Pressable, ScrollView, useWindowDimensions } from "react-native";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { StyleSheet, View, Text, TouchableOpacity, Pressable, ScrollView, Image, useWindowDimensions } from "react-native";
 import { Canvas, Image as SkImage, useImage } from "@shopify/react-native-skia";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import {
@@ -22,9 +22,14 @@ import {
   shelfById,
   ZONES,
   zoneById,
+  zoneLight,
   type PlacedShelf,
 } from "../data/shelves";
 import { CUSTOMER_COUNT, type CustomerMood } from "./customerSprites";
+import { ALBUM } from "../data/album";
+import { plantSpriteSource } from "./plantSprites";
+import CoinIcon from "../../assets/icons/coin-icon.svg";
+import XpIcon from "../../assets/icons/xp-icon.svg";
 import {
   SPECIES,
   speciesById,
@@ -36,6 +41,12 @@ import {
   POT_TIERS,
   POT_TIER_ORDER,
   STAGE_LABEL,
+  WATER_DRAIN,
+  WATER_MAX,
+  WATER_PER_TAP,
+  WATER_LABEL,
+  BAD_LIGHT_BADGE_S,
+  lightGap,
   type Request,
   type TraitKey,
   type PotTier,
@@ -142,6 +153,7 @@ export function ShopScene() {
         water: 1,
         stage: 2,
         growth: 0,
+        badLight: 0,
         pot: "nursery",
       };
     });
@@ -150,6 +162,11 @@ export function ShopScene() {
   const pots = useSharedValue(initialPots);
 
   const [coins, setCoins] = useState(100);
+  const [hearts, setHearts] = useState(0); // earned from happy customers (stars), spent on Album unlocks
+  const [albumOpen, setAlbumOpen] = useState(false);
+  const [unlocked, setUnlocked] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(ALBUM.filter((a) => a.playable).map((a) => [a.slug, true]))
+  );
   const [phase, setPhase] = useState<"open" | "closed">("closed");
   const [day, setDay] = useState(1);
   const [servedCount, setServedCount] = useState(0);
@@ -161,6 +178,7 @@ export function ShopScene() {
   const [placePot, setPlacePot] = useState<PotTier>("nursery");
   const [daySummary, setDaySummary] = useState<null | { coins: number; happy: number; angry: number }>(null);
   const [, setTick] = useState(0);
+  const [dragPid, setDragPid] = useState<string | null>(null); // mirrors dragId for slot light tinting
 
   // --- Shelves & light zones ---
   // 4 zones, each with ONE shelf spot. A zone shows its starter surface
@@ -195,6 +213,9 @@ export function ShopScene() {
     }
     return arr;
   }, [zoneShelves, W, H, SC]);
+  // The tend interval runs in an effect with no deps — it reads slots via this ref.
+  const slotsRef = useRef(slots);
+  slotsRef.current = slots;
 
   function zoneSlotIds(zoneId: string): number[] {
     const placed = zoneShelves[zoneId];
@@ -358,6 +379,7 @@ export function ShopScene() {
     resolvedRef.current = true;
     customerSv.value = null; // close the serve gate NOW, not after the leave delay
     setCoins((c) => c + price);
+    setHearts((h) => h + stars); // happiness pays hearts: 1/2/3 by stars
     dayStats.current.coins += price;
     dayStats.current.happy += 1;
     setCustomer((c) =>
@@ -387,11 +409,21 @@ export function ShopScene() {
   }
 
   function handleWater(plantId: string) {
-    pots.value = {
-      ...pots.value,
-      [plantId]: { ...pots.value[plantId], water: 1 },
-    };
+    const p = pots.value[plantId];
+    if (!p) return;
+    // +0.5 per watering (two taps from empty = full). Past 1 the plant is
+    // waterlogged — it droops and growth pauses until the excess drains.
+    const cap = WATER_MAX[speciesById(p.speciesId).water];
+    const water = Math.min(cap, p.water + WATER_PER_TAP);
+    if (water === p.water) return;
+    pots.value = { ...pots.value, [plantId]: { ...p, water } };
     setTick((t) => t + 1);
+  }
+
+  function unlockSpecies(slug: string, cost: number) {
+    if (unlocked[slug] || hearts < cost) return;
+    setHearts((h) => h - cost);
+    setUnlocked((u) => ({ ...u, [slug]: true }));
   }
 
   function buyPlant(speciesId: string) {
@@ -419,6 +451,7 @@ export function ShopScene() {
         water: 1,
         stage: 0,
         growth: 0,
+        badLight: 0,
         pot,
       },
     };
@@ -528,25 +561,41 @@ export function ShopScene() {
     setTick((t) => t + 1);
   }
 
-  // water drain + growth (runs in both phases)
+  // water drain + light-gated growth + bad-light tracking (runs in both phases)
   useEffect(() => {
     const iv = setInterval(() => {
       let changed = false;
       const next = { ...pots.value };
       for (const id in next) {
         const p = next[id];
-        if (p.water <= 0) continue;
-        let { water, stage, growth } = p;
-        water = Math.max(0, water - 1 / 60);
-        if (stage < 2) {
-          growth += 1 / 25;
+        const sp = speciesById(p.speciesId);
+        let { water, stage, growth, badLight } = p;
+        // drain by water group: low 300s / med 180s / high 120s for a full meter
+        water = Math.max(0, water - 1 / WATER_DRAIN[sp.water]);
+        const waterlogged = water > 1;
+        // light: zone level vs the species' tolerated band (mature plants exempt)
+        const zoneId = slotsRef.current[p.slot]?.zone;
+        const gap = lightGap(sp, zoneId ? zoneLight(zoneId) : 2);
+        // bad light accrues only while CLOSED (the arranging phase) — frozen
+        // while open, when the player can't move plants anyway
+        if (phaseSv.value === "closed") {
+          if (stage < 2 && gap >= 2) badLight += 1;
+          else if (badLight > 0) badLight = Math.max(0, badLight - 2);
+        }
+        // growth: only when watered and not waterlogged; in range = full,
+        // one tier out = half, two+ out = paused (the plant waits, no death)
+        if (stage < 2 && water > 0 && !waterlogged) {
+          const speed = gap === 0 ? 1 : gap === 1 ? 0.5 : 0;
+          growth += speed / 25;
           if (growth >= 1) {
             growth = 0;
             stage = (stage + 1) as 0 | 1 | 2;
           }
         }
-        next[id] = { ...p, water, stage, growth };
-        changed = true;
+        if (water !== p.water || stage !== p.stage || growth !== p.growth || badLight !== p.badLight) {
+          next[id] = { ...p, water, stage, growth, badLight };
+          changed = true;
+        }
       }
       if (changed) {
         pots.value = next;
@@ -576,9 +625,9 @@ export function ShopScene() {
   }, [customer?.id, customer?.mood]);
 
   // Tap = water/manage (dedicated Tap gesture, reliable). Pan = drag to move/serve.
-  // The modals render INSIDE the GestureDetector, so the scene gesture must be
-  // switched off while one is open or taps on the modal water plants behind it.
-  const anyModalOpen = supplierOpen || slotModal !== null || shelfPanelOpen;
+  // Modals render OUTSIDE the GestureDetector; this switch-off is belt-and-
+  // braces so a stray scene tap can never water a plant behind an open modal.
+  const anyModalOpen = supplierOpen || slotModal !== null || shelfPanelOpen || albumOpen;
   const gesture = useMemo(() => {
     const tap = Gesture.Tap()
       .maxDuration(500)
@@ -670,6 +719,7 @@ export function ShopScene() {
             const dy = e.y - ps[id].wy;
             if (dx * dx + dy * dy < grabR * grabR) {
               dragId.value = id;
+              runOnJS(setDragPid)(id);
               grabDX.value = e.x - ps[id].wx;
               grabDY.value = e.y - ps[id].wy;
               dragDX.value = 0;
@@ -767,6 +817,9 @@ export function ShopScene() {
             dragDY.value = withSpring(0, SPRING);
           }
           dragId.value = null;
+        })
+        .onFinalize(() => {
+          runOnJS(setDragPid)(null);
         });
 
     return Gesture.Race(tap, pan);
@@ -784,6 +837,10 @@ export function ShopScene() {
       ? [...potIds.filter((i) => i !== presentedId), presentedId]
       : potIds;
   const presentedPlant = presentedId ? pots.value[presentedId] : null;
+  // While dragging in closed phase, slot markers tint by light match for the
+  // dragged species: green = in range, amber = one tier out, red = far out.
+  const dragSp = dragPid && pots.value[dragPid] ? speciesById(pots.value[dragPid].speciesId) : null;
+  const GAP_TINT = ["#43a047", "#f0a500", "#d43a2f"];
   const spriteMood: CustomerMood =
     customer?.mood === "happy" ? "happy" : customer?.mood === "angry" ? "upset" : "neutral";
 
@@ -856,8 +913,11 @@ export function ShopScene() {
               Day {day} • {phase === "open" ? `Open ${servedCount}/${CUSTOMERS_PER_DAY}` : "Closed"}
             </Text>
           </View>
-          <View pointerEvents="none" style={[styles.coins, { top: H * 0.03 }]}>
-            <Text style={styles.coinText}>🪙 {coins}</Text>
+          <View pointerEvents="none" style={[styles.coins, { top: H * 0.03, flexDirection: "row", alignItems: "center" }]}>
+            <CoinIcon width={16} height={16} />
+            <Text style={styles.coinText}> {coins} · </Text>
+            <XpIcon width={16} height={16} />
+            <Text style={styles.coinText}> {hearts}</Text>
           </View>
           {/* watering mode banner: unmistakable, so taps never surprise */}
           {canMode && (
@@ -865,13 +925,22 @@ export function ShopScene() {
               <Text style={styles.wateringText}>💧 Watering — tap plants, tap the can to put it away</Text>
             </View>
           )}
-          {/* shelves panel toggle (closed only) */}
+          {/* design panel toggle (closed only) */}
           {phase === "closed" && !daySummary && (
             <TouchableOpacity
               style={[styles.decorateBtn, { top: H * 0.11 }]}
               onPress={() => setShelfPanelOpen(true)}
             >
-              <Text style={styles.supplierText}>🪑 Shelves</Text>
+              <Text style={styles.supplierText}>🎨 Design</Text>
+            </TouchableOpacity>
+          )}
+          {/* album toggle (closed only) */}
+          {phase === "closed" && !daySummary && (
+            <TouchableOpacity
+              style={[styles.decorateBtn, { top: H * 0.19 }]}
+              onPress={() => setAlbumOpen(true)}
+            >
+              <Text style={styles.supplierText}>📖 Album</Text>
             </TouchableOpacity>
           )}
           {/* shelf hint toast (e.g. "Clear the shelf first!") */}
@@ -882,7 +951,7 @@ export function ShopScene() {
           )}
           {phase === "closed" ? (
             <TouchableOpacity style={[styles.supplierBtn, { top: H * 0.03 }]} onPress={() => setSupplierOpen(true)}>
-              <Text style={styles.supplierText}>🌱 Supplier{totalInv > 0 ? ` (${totalInv})` : ""}</Text>
+              <Text style={styles.supplierText}>🛒 Shop{totalInv > 0 ? ` (${totalInv})` : ""}</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity style={[styles.supplierBtn, { top: H * 0.03 }]} onPress={closeShop}>
@@ -901,27 +970,67 @@ export function ShopScene() {
           {slots.map((s, i) => {
             const pid = potBySlot[i];
             if (!pid || pid === presentedId) return null;
+            const tint =
+              phase === "closed" && dragSp && pid !== dragPid
+                ? GAP_TINT[lightGap(dragSp, zoneLight(s.zone))]
+                : null;
             return (
-              <View key={i} pointerEvents="none" style={[styles.marker, { left: s.x - 44, top: s.y + 46 }]}>
+              <View
+                key={i}
+                pointerEvents="none"
+                style={[
+                  styles.marker,
+                  { left: s.x - 44, top: s.y + 46 },
+                  tint ? { borderWidth: 2, borderColor: tint } : null,
+                ]}
+              >
                 <Text style={styles.markerText}>{speciesById(pots.value[pid].speciesId).name}</Text>
               </View>
             );
           })}
 
-          {/* "!" attention markers */}
+          {/* "!" attention markers: red = thirsty, blue = waterlogged */}
           {slots.map((s, i) => {
             const pid = potBySlot[i];
             if (!pid || pid === presentedId) return null;
-            const thirsty = (pots.value[pid]?.water ?? 1) < 0.35;
-            return thirsty ? (
+            const w = pots.value[pid]?.water ?? 1;
+            const thirsty = w < 0.35;
+            const waterlogged = w > 1;
+            if (!thirsty && !waterlogged) return null;
+            return (
               <View
                 key={`alert${i}`}
                 pointerEvents="none"
-                style={[styles.alert, { left: s.x - 13, top: s.y - 178 }]}
+                style={[
+                  styles.alert,
+                  { left: s.x - 13, top: s.y - 178 },
+                  waterlogged && { backgroundColor: "#1c6dd9" },
+                ]}
               >
                 <Text style={styles.alertText}>!</Text>
               </View>
-            ) : null;
+            );
+          })}
+
+          {/* amber sun badge + hint: growing plant stuck in far-bad light (60s+, closed-phase time) */}
+          {slots.map((s, i) => {
+            const pid = potBySlot[i];
+            if (!pid || pid === presentedId) return null;
+            const p = pots.value[pid];
+            if (!p || p.stage >= 2 || p.badLight < BAD_LIGHT_BADGE_S) return null;
+            const sp = speciesById(p.speciesId);
+            const lvl = zoneLight(s.zone);
+            const hint = lvl < sp.lightMin ? "needs more light" : "too much sun";
+            return (
+              <Fragment key={`sun${i}`}>
+                <View pointerEvents="none" style={[styles.sunBadge, { left: s.x - 43, top: s.y - 178 }]}>
+                  <Text style={styles.sunBadgeText}>☀</Text>
+                </View>
+                <View pointerEvents="none" style={[styles.lightHint, { left: s.x - 55, top: s.y + 68 }]}>
+                  <Text style={styles.lightHintText}>{hint}</Text>
+                </View>
+              </Fragment>
+            );
           })}
 
           {/* water gauges (watering mode): every plant shows its level */}
@@ -932,7 +1041,13 @@ export function ShopScene() {
                 pointerEvents="none"
                 style={[styles.gauge, { left: p.wx + 42, top: p.wy - 36 }]}
               >
-                <View style={[styles.gaugeFill, { height: Math.max(2, 66 * p.water) }]} />
+                <View
+                  style={[
+                    styles.gaugeFill,
+                    { height: Math.max(2, 66 * Math.min(p.water, 1)) },
+                    p.water > 1 ? { backgroundColor: "#1c5d99" } : null,
+                  ]}
+                />
               </View>
             ))}
 
@@ -952,76 +1067,82 @@ export function ShopScene() {
           {phase === "closed" &&
             slots.map((s, i) => {
               if (potBySlot[i]) return null;
+              const tint = dragSp ? GAP_TINT[lightGap(dragSp, zoneLight(s.zone))] : null;
               return (
                 <View
                   key={`empty${i}`}
                   pointerEvents="none"
-                  style={[styles.emptySlot, { left: s.x - 24, top: s.y - 24 }]}
+                  style={[
+                    styles.emptySlot,
+                    { left: s.x - 24, top: s.y - 24 },
+                    tint ? { borderColor: tint, backgroundColor: tint + "33" } : null,
+                  ]}
                 >
                   <Text style={styles.emptyText}>+</Text>
                 </View>
               );
             })}
 
-          {/* supplier modal */}
-          {supplierOpen && (
-            <Pressable style={styles.backdrop} onPress={() => setSupplierOpen(false)}>
-              <Pressable style={[styles.modal, { width: W * 0.6 }]} onPress={(e) => e.stopPropagation()}>
-                <Text style={styles.modalTitle}>🌱 Supplier</Text>
-                <Text style={styles.modalCoins}>🪙 {coins}</Text>
-                <ScrollView style={{ maxHeight: H * 0.55 }}>
-                {SPECIES.map((sp) => (
-                  <View key={sp.id} style={styles.row}>
-                    <Text style={styles.rowName}>{sp.name}</Text>
-                    <Text style={styles.rowSub}>
-                      buy 🪙{sp.buy} • sells 🪙{sp.sell}
-                      {(inventory[sp.id] ?? 0) > 0 && ` • own ${inventory[sp.id]}`}
-                    </Text>
-                    <TouchableOpacity
-                      style={[styles.buyBtn, coins < sp.buy && styles.disabledBtn]}
-                      onPress={() => buyPlant(sp.id)}
-                      disabled={coins < sp.buy}
-                    >
-                      <Text style={styles.buyText}>Buy</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-                <Text style={styles.sectionLabel}>Shelves (assign them in the 🪑 Shelves panel):</Text>
-                {SHELF_DEFS.map((def) => {
-                  const inStorage = shelfStorage.filter((d) => d === def.id).length;
-                  return (
-                    <View key={def.id} style={styles.row}>
-                      <Text style={styles.rowName}>{def.name}</Text>
-                      <Text style={styles.rowSub}>
-                        {def.blurb} • 🪙{def.price}
-                        {inStorage > 0 && ` • in storage ${inStorage}`}
-                      </Text>
-                      <TouchableOpacity
-                        style={[styles.buyBtn, coins < def.price && styles.disabledBtn]}
-                        onPress={() => buyShelf(def.id)}
-                        disabled={coins < def.price}
-                      >
-                        <Text style={styles.buyText}>Buy</Text>
-                      </TouchableOpacity>
-                    </View>
-                  );
-                })}
-                </ScrollView>
-                <TouchableOpacity style={styles.closeBtn} onPress={() => setSupplierOpen(false)}>
-                  <Text style={styles.closeText}>Close</Text>
-                </TouchableOpacity>
-                {totalInv > 0 && (
-                  <Text style={styles.hint}>Tap an empty shelf (+) to plant your purchases!</Text>
-                )}
-              </Pressable>
-            </Pressable>
-          )}
+        </View>
+      </GestureDetector>
+
+      {/* modals live OUTSIDE the GestureDetector — inside it, the scene's Pan
+          handler swallows drags, so a modal ScrollView can never scroll */}
+      {/* supplier modal */}
+      {supplierOpen && (
+        <View style={styles.backdrop}>
+          <Pressable style={styles.backdropTap} onPress={() => setSupplierOpen(false)} />
+          <View style={[styles.modal, { width: W * 0.6 }]}>
+              <ScrollView style={{ maxHeight: H * 0.55 }}>
+                <View style={styles.shopGrid}>
+                  {SPECIES.map((sp) => {
+                    const src = plantSpriteSource(sp.id, "sprout-healthy");
+                    const own = inventory[sp.id] ?? 0;
+                    return (
+                      <View key={sp.id} style={styles.shopCell}>
+                        <View style={styles.shopImgWrap}>
+                          {src ? (
+                            <Image source={src} style={styles.shopImg} resizeMode="contain" />
+                          ) : (
+                            <Text style={styles.shopEmoji}>🌱</Text>
+                          )}
+                          {own > 0 && (
+                            <View style={styles.shopBadge}>
+                              <Text style={styles.shopBadgeText}>{own}</Text>
+                            </View>
+                          )}
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.shopBuyBtn, coins < sp.buy && styles.disabledBtn]}
+                          onPress={() => buyPlant(sp.id)}
+                          disabled={coins < sp.buy}
+                        >
+                          <View style={styles.iconRow}>
+                            <CoinIcon width={13} height={13} />
+                            <Text style={styles.buyText}> {sp.buy}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+              <TouchableOpacity style={styles.closeBtn} onPress={() => setSupplierOpen(false)}>
+                <Text style={styles.closeText}>Close</Text>
+              </TouchableOpacity>
+              {totalInv > 0 && (
+                <Text style={styles.hint}>Tap an empty shelf (+) to plant your purchases!</Text>
+              )}
+          </View>
+        </View>
+      )}
 
           {/* shelves panel: one shelf per light zone (an upgrade) */}
           {shelfPanelOpen && (
             <View style={styles.backdrop}>
               <View style={[styles.modal, { width: W * 0.72 }]}>
-                <Text style={styles.modalTitle}>🪑 Shelves & Light Zones</Text>
+                <Text style={styles.modalTitle}>🎨 Design</Text>
+                <ScrollView style={{ maxHeight: H * 0.55 }} showsVerticalScrollIndicator={false}>
                 {ZONES.map((zone) => {
                   const placed = zoneShelves[zone.id];
                   const curName = placed ? shelfById(placed.defId).name : zone.starterName;
@@ -1031,7 +1152,7 @@ export function ShopScene() {
                   return (
                     <View key={zone.id} style={styles.zoneBlock}>
                       <Text style={styles.rowName}>
-                        {zone.name} · {zone.lightLabel}
+                        {zone.name} · {zone.lightLabel} · Lv{zone.light}
                       </Text>
                       <Text style={styles.rowSub}>
                         Now: {curName} • {curSlots} spots
@@ -1062,6 +1183,29 @@ export function ShopScene() {
                     </View>
                   );
                 })}
+                <Text style={styles.sectionLabel}>Buy shelves:</Text>
+                {SHELF_DEFS.map((def) => {
+                  const inStorage = shelfStorage.filter((d) => d === def.id).length;
+                  return (
+                    <View key={def.id} style={styles.row}>
+                      <Text style={styles.rowName}>{def.name}</Text>
+                      <Text style={styles.rowSub}>{def.blurb} • </Text>
+                      <CoinIcon width={12} height={12} />
+                      <Text style={styles.rowSub}>
+                        {def.price}
+                        {inStorage > 0 && ` • in storage ${inStorage}`}
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.buyBtn, coins < def.price && styles.disabledBtn]}
+                        onPress={() => buyShelf(def.id)}
+                        disabled={coins < def.price}
+                      >
+                        <Text style={styles.buyText}>Buy</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+                </ScrollView>
                 <TouchableOpacity style={styles.closeBtn} onPress={() => setShelfPanelOpen(false)}>
                   <Text style={styles.closeText}>Close</Text>
                 </TouchableOpacity>
@@ -1082,7 +1226,7 @@ export function ShopScene() {
                       .map(([sid, count]) => (
                         <View key={sid} style={styles.row}>
                           <Text style={styles.rowName}>
-                            {speciesById(sid).name} ×{count}
+                            {speciesById(sid).name} ×{count} · ☀{speciesById(sid).lightMin}–{speciesById(sid).lightMax} · 💧{WATER_LABEL[speciesById(sid).water]}
                           </Text>
                           <TouchableOpacity
                             style={styles.buyBtn}
@@ -1100,14 +1244,64 @@ export function ShopScene() {
                           style={[styles.potChip, placePot === t && styles.potChipSel]}
                           onPress={() => setPlacePot(t)}
                         >
-                          <Text style={styles.potChipText}>
-                            {POT_TIERS[t].name}
-                            {POT_TIERS[t].price > 0 ? ` 🪙${POT_TIERS[t].price}` : " free"} (+{Math.round(POT_TIERS[t].bonus * 100)}%)
-                          </Text>
+                          <View style={styles.iconRow}>
+                            <Text style={styles.potChipText}>{POT_TIERS[t].name}{POT_TIERS[t].price > 0 ? " " : " free "}</Text>
+                            {POT_TIERS[t].price > 0 && (
+                              <>
+                                <CoinIcon width={12} height={12} />
+                                <Text style={styles.potChipText}>{POT_TIERS[t].price}</Text>
+                              </>
+                            )}
+                            <Text style={styles.potChipText}> (+{Math.round(POT_TIERS[t].bonus * 100)}%)</Text>
+                          </View>
                         </TouchableOpacity>
                       ))}
                     </View>
                 <TouchableOpacity style={styles.closeBtn} onPress={() => setSlotModal(null)}>
+                  <Text style={styles.closeText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* album: the collection — hearts unlock, coins buy (in the Shop) */}
+          {albumOpen && (
+            <View style={styles.backdrop}>
+              <Pressable style={styles.backdropTap} onPress={() => setAlbumOpen(false)} />
+              <View style={[styles.modal, { width: W * 0.62 }]}>
+                <Text style={styles.modalTitle}>📖 Album</Text>
+                <View style={styles.hintRow}>
+                  <Text style={styles.hint}>{ALBUM.filter((a) => unlocked[a.slug]).length}/{ALBUM.length} collected · </Text>
+                  <XpIcon width={12} height={12} />
+                  <Text style={styles.hint}> {hearts} — happy customers earn hearts; hearts unlock plants here, coins buy them in the Shop</Text>
+                </View>
+                <ScrollView style={{ maxHeight: H * 0.55 }} showsVerticalScrollIndicator={false}>
+                  {ALBUM.map((a) => {
+                    const isOpen = !!unlocked[a.slug];
+                    return (
+                      <View key={a.slug} style={styles.row}>
+                        <View style={[styles.albumDot, isOpen ? styles.albumDotOpen : styles.albumDotLocked]} />
+                        <Text style={styles.rowName}>{a.name}</Text>
+                        <Text style={styles.rowSub}>
+                          {`${a.scientific} • ☀${a.lightMin}–${a.lightMax} • 💧${WATER_LABEL[a.water]}${a.playable ? " • in the Shop" : ""}`}
+                        </Text>
+                        {!isOpen && (
+                          <TouchableOpacity
+                            style={[styles.buyBtn, hearts < a.hearts && styles.disabledBtn]}
+                            onPress={() => unlockSpecies(a.slug, a.hearts)}
+                            disabled={hearts < a.hearts}
+                          >
+                            <View style={styles.iconRow}>
+                              <XpIcon width={13} height={13} />
+                              <Text style={styles.buyText}> {a.hearts}</Text>
+                            </View>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+                <TouchableOpacity style={styles.closeBtn} onPress={() => setAlbumOpen(false)}>
                   <Text style={styles.closeText}>Close</Text>
                 </TouchableOpacity>
               </View>
@@ -1119,17 +1313,19 @@ export function ShopScene() {
             <View style={styles.backdrop}>
               <View style={[styles.modal, { width: W * 0.5, alignItems: "center" }]}>
                 <Text style={styles.modalTitle}>Day {day - 1} complete!</Text>
-                <Text style={styles.rowSub}>
-                  +🪙{daySummary.coins} • 😊 {daySummary.happy} • 😞 {daySummary.angry}
-                </Text>
+                <View style={styles.iconRow}>
+                  <Text style={styles.rowSub}>+</Text>
+                  <CoinIcon width={13} height={13} />
+                  <Text style={styles.rowSub}>
+                    {daySummary.coins} • 😊 {daySummary.happy} • 😞 {daySummary.angry}
+                  </Text>
+                </View>
                 <TouchableOpacity style={styles.openBtn2} onPress={() => setDaySummary(null)}>
                   <Text style={styles.openText}>Prep for Day {day}</Text>
                 </TouchableOpacity>
               </View>
             </View>
           )}
-        </View>
-      </GestureDetector>
 
       {/* presented plant: water it right here on the counter (outside the
           GestureDetector so its taps never reach the scene Tap) */}
@@ -1159,7 +1355,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 4,
   },
-  bubbleText: { fontSize: 15, fontWeight: "600", color: "#4a3b2c", textAlign: "center" },
+  bubbleText: { fontSize: 15, fontFamily: "Cause_600SemiBold", color: "#4a3b2c", textAlign: "center" },
   pips: { flexDirection: "row", marginTop: 6, gap: 3 },
   pip: { width: 14, height: 8, borderRadius: 3 },
   dayPill: {
@@ -1170,7 +1366,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  dayText: { fontSize: 14, fontWeight: "700", color: "#4a3b2c" },
+  dayText: { fontSize: 14, fontFamily: "Cause_700Bold", color: "#4a3b2c" },
   coins: {
     position: "absolute",
     right: 16,
@@ -1179,7 +1375,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  coinText: { fontSize: 16, fontWeight: "700", color: "#4a3b2c" },
+  coinText: { fontSize: 16, fontFamily: "Cause_700Bold", color: "#4a3b2c" },
   supplierBtn: {
     position: "absolute",
     left: 16,
@@ -1188,7 +1384,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  supplierText: { fontSize: 14, fontWeight: "700", color: "#4a3b2c" },
+  supplierText: { fontSize: 14, fontFamily: "Cause_700Bold", color: "#4a3b2c" },
   openBtn: {
     position: "absolute",
     alignSelf: "center",
@@ -1201,7 +1397,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 4,
   },
-  openText: { fontSize: 18, fontWeight: "800", color: "#4a3b2c" },
+  openText: { fontSize: 18, fontFamily: "Cause_700Bold", color: "#4a3b2c" },
   openBtn2: {
     backgroundColor: "#ffb300",
     borderRadius: 14,
@@ -1217,7 +1413,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     alignItems: "center",
   },
-  markerText: { fontSize: 10, color: "#ffe9c4", fontWeight: "600", textAlign: "center" },
+  markerText: { fontSize: 10, color: "#ffe9c4", fontFamily: "Cause_600SemiBold", textAlign: "center" },
   alert: {
     position: "absolute",
     width: 26,
@@ -1231,7 +1427,30 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  alertText: { fontSize: 16, fontWeight: "800", color: "#fff" },
+  alertText: { fontSize: 16, fontFamily: "Cause_700Bold", color: "#fff" },
+  sunBadge: {
+    position: "absolute",
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#f0a500",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sunBadgeText: { fontSize: 14, fontFamily: "Cause_400Regular", color: "#fff" },
+  lightHint: {
+    position: "absolute",
+    width: 110,
+    backgroundColor: "rgba(240,165,0,0.92)",
+    borderRadius: 6,
+    paddingVertical: 2,
+    alignItems: "center",
+  },
+  lightHintText: { fontSize: 10, color: "#fff", fontFamily: "Cause_700Bold", textAlign: "center" },
   emptySlot: {
     position: "absolute",
     width: 48,
@@ -1243,7 +1462,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  emptyText: { fontSize: 26, fontWeight: "700", color: "rgba(255,253,248,0.9)" },
+  emptyText: { fontSize: 26, fontFamily: "Cause_700Bold", color: "rgba(255,253,248,0.9)" },
   backdrop: {
     position: "absolute",
     left: 0,
@@ -1254,14 +1473,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  backdropTap: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
   modal: {
     backgroundColor: "#fffdf8",
     borderRadius: 16,
     padding: 16,
     maxHeight: "85%",
   },
-  modalTitle: { fontSize: 18, fontWeight: "800", color: "#4a3b2c", marginBottom: 4 },
-  modalCoins: { fontSize: 14, fontWeight: "700", color: "#4a3b2c", marginBottom: 8 },
+  modalTitle: { fontSize: 18, fontFamily: "Cause_700Bold", color: "#4a3b2c", marginBottom: 4 },
+  modalCoins: { fontSize: 14, fontFamily: "Cause_700Bold", color: "#4a3b2c", marginBottom: 8 },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -1269,8 +1489,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#eee5d5",
   },
-  rowName: { flex: 1, fontSize: 14, fontWeight: "600", color: "#4a3b2c" },
-  rowSub: { fontSize: 12, color: "#8a7a64", marginRight: 8 },
+  rowName: { flex: 1, fontSize: 14, fontFamily: "Cause_600SemiBold", color: "#4a3b2c" },
+  rowSub: { fontSize: 12, fontFamily: "Cause_400Regular", color: "#8a7a64", marginRight: 8 },
   buyBtn: {
     backgroundColor: "#4caf50",
     borderRadius: 10,
@@ -1278,7 +1498,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   disabledBtn: { backgroundColor: "#bdbdbd" },
-  buyText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+  buyText: { fontSize: 14, fontFamily: "Cause_700Bold", color: "#fff" },
   closeBtn: {
     marginTop: 12,
     alignItems: "center",
@@ -1286,9 +1506,39 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 8,
   },
-  closeText: { fontSize: 14, fontWeight: "700", color: "#4a3b2c" },
-  hint: { fontSize: 13, color: "#8a7a64", fontStyle: "italic", marginVertical: 8 },
-  sectionLabel: { fontSize: 13, fontWeight: "700", color: "#4a3b2c", marginTop: 10, marginBottom: 6 },
+  closeText: { fontSize: 14, fontFamily: "Cause_700Bold", color: "#4a3b2c" },
+  hint: { fontSize: 13, fontFamily: "Cause_400Regular", color: "#8a7a64", marginVertical: 8 },
+  sectionLabel: { fontSize: 13, fontFamily: "Cause_700Bold", color: "#4a3b2c", marginTop: 10, marginBottom: 6 },
+  iconRow: { flexDirection: "row", alignItems: "center" },
+  hintRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "center" },
+  shopGrid: { flexDirection: "row", flexWrap: "wrap" },
+  shopCell: { width: "20%", height: 124, alignItems: "center", paddingVertical: 8 },
+  shopImgWrap: { width: 58, height: 77 },
+  shopImg: { width: 58, height: 77 },
+  shopEmoji: { fontSize: 40, width: 58, height: 77, textAlign: "center" },
+  shopBadge: {
+    position: "absolute",
+    top: -4,
+    right: -10,
+    backgroundColor: "#e05252",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+  shopBadgeText: { color: "#fff", fontSize: 12, fontFamily: "Cause_700Bold" },
+  shopBuyBtn: {
+    backgroundColor: "#4caf50",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginTop: 4,
+  },
+  albumDot: { width: 30, height: 30, borderRadius: 15, marginRight: 10 },
+  albumDotOpen: { backgroundColor: "#7cb342" },
+  albumDotLocked: { backgroundColor: "#2e2a26" },
   potRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   potChip: {
     borderWidth: 1,
@@ -1298,7 +1548,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   potChipSel: { backgroundColor: "#ffe9c4", borderColor: "#c9763f" },
-  potChipText: { fontSize: 12, fontWeight: "600", color: "#4a3b2c" },
+  potChipText: { fontSize: 12, fontFamily: "Cause_600SemiBold", color: "#4a3b2c" },
   slotGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
   slotCell: {
     width: 44,
@@ -1327,7 +1577,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     alignItems: "center",
   },
-  presentText: { fontSize: 12, fontWeight: "700", color: "#fff6e6" },
+  presentText: { fontSize: 12, fontFamily: "Cause_700Bold", color: "#fff6e6" },
   waterBtn: {
     position: "absolute",
     width: 46,
@@ -1351,7 +1601,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  wateringText: { fontSize: 13, fontWeight: "700", color: "#ffffff" },
+  wateringText: { fontSize: 13, fontFamily: "Cause_700Bold", color: "#ffffff" },
   decorateBtn: {
     position: "absolute",
     left: 12,
@@ -1376,5 +1626,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  zoneBtnText: { color: "#fff", fontWeight: "700", fontSize: 12 },
+  zoneBtnText: { color: "#fff", fontFamily: "Cause_700Bold", fontSize: 12 },
 });

@@ -18,6 +18,8 @@ export const PLANT_ART: Record<string, PlantArt> = {
   monstera: { folder: "monstera-deliciosa", ...SHARED_CANVAS, size: 140 },
   snake: { folder: "snake-plant", ...SHARED_CANVAS, size: 140 },
   pilea: { folder: "pilea", ...SHARED_CANVAS, size: 135 },
+  fern: { folder: "boston-fern", ...SHARED_CANVAS, size: 150 },
+  aloe: { folder: "aloe-vera", ...SHARED_CANVAS, size: 120 },
 };
 
 const SPRITES: Record<string, any> = {
@@ -53,6 +55,22 @@ const SPRITES: Record<string, any> = {
   "pilea/mature-healthy": require("../../assets/plants/pilea/mature-healthy.png"),
   "pilea/mature-thirsty": require("../../assets/plants/pilea/mature-thirsty.png"),
   "pilea/mature-half-dead": require("../../assets/plants/pilea/mature-half-dead.png"),
+  "fern/sprout-healthy": require("../../assets/plants/boston-fern/sprout-healthy.png"),
+  "fern/sprout-half-dead": require("../../assets/plants/boston-fern/sprout-half-dead.png"),
+  "fern/growing-healthy": require("../../assets/plants/boston-fern/growing-healthy.png"),
+  "fern/growing-thirsty": require("../../assets/plants/boston-fern/growing-thirsty.png"),
+  "fern/growing-half-dead": require("../../assets/plants/boston-fern/growing-half-dead.png"),
+  "fern/mature-healthy": require("../../assets/plants/boston-fern/mature-healthy.png"),
+  "fern/mature-thirsty": require("../../assets/plants/boston-fern/mature-thirsty.png"),
+  "fern/mature-half-dead": require("../../assets/plants/boston-fern/mature-half-dead.png"),
+  "aloe/sprout-healthy": require("../../assets/plants/aloe-vera/sprout-healthy.png"),
+  "aloe/sprout-half-dead": require("../../assets/plants/aloe-vera/sprout-half-dead.png"),
+  "aloe/growing-healthy": require("../../assets/plants/aloe-vera/growing-healthy.png"),
+  "aloe/growing-thirsty": require("../../assets/plants/aloe-vera/growing-thirsty.png"),
+  "aloe/growing-half-dead": require("../../assets/plants/aloe-vera/growing-half-dead.png"),
+  "aloe/mature-healthy": require("../../assets/plants/aloe-vera/mature-healthy.png"),
+  "aloe/mature-thirsty": require("../../assets/plants/aloe-vera/mature-thirsty.png"),
+  "aloe/mature-half-dead": require("../../assets/plants/aloe-vera/mature-half-dead.png"),
 };
 
 export const STAGE_NAMES = ['sprout', 'growing', 'mature'] as const;
@@ -63,9 +81,11 @@ export function plantCondition(water: number): 'healthy' | 'thirsty' | 'half-dea
   return 'healthy';
 }
 
-export function plantSpriteKey(stage: 0 | 1 | 2, water: number): string {
+export function plantSpriteKey(stage: 0 | 1 | 2, water: number, droop = false): string {
   const stageName = STAGE_NAMES[stage];
   let cond = plantCondition(water);
+  // Waterlogged or light-drooped plants wear the thirsty art (no death sprite).
+  if (droop && cond === 'healthy') cond = 'thirsty';
   if (stageName === 'sprout' && cond === 'thirsty') cond = 'healthy';
   return `${stageName}-${cond}`;
 }

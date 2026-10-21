@@ -63,6 +63,8 @@ export interface ClosedModalsProps {
   unlocked: Record<string, boolean>;
   hearts: number;
   onUnlock: (slug: string, hearts: number) => void;
+  owned: Record<string, number>;
+  sold: Record<string, number>;
   // day summary
   daySummary: { coins: number; happy: number; angry: number } | null;
   onCloseSummary: () => void;
@@ -154,6 +156,8 @@ export function ClosedModals(p: ClosedModalsProps) {
         unlocked={p.unlocked}
         hearts={p.hearts}
         onUnlock={p.onUnlock}
+        owned={p.owned}
+        sold={p.sold}
       />
       {/* day summary */}
       {p.daySummary && (

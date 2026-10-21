@@ -199,6 +199,8 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
     onHome();
   }
   const [inventory, setInventory] = useState<Record<string, number>>({});
+  // lifetime sales per species (the Album's sold stat; session-only for now)
+  const [soldCounts, setSoldCounts] = useState<Record<string, number>>({});
   // Shop list (the notebook): staged plants, bought all at once. Lives in
   // scene state so it survives the Shop modal closing.
   const [cart, setCart] = useState<Record<string, number>>({});
@@ -442,6 +444,8 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
         ? { ...c, mood: "happy", note: stars === 3 ? "Perfect, thank you!" : "This'll do, thanks!" }
         : c
     );
+    const soldSpecies = pots.value[plantId]?.speciesId;
+    if (soldSpecies) setSoldCounts((m) => ({ ...m, [soldSpecies]: (m[soldSpecies] ?? 0) + 1 }));
     // sold plant is gone; slot stays empty until replanted (no auto-restock)
     const next = { ...pots.value };
     delete next[plantId];
@@ -919,6 +923,11 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
   const potBySlot: Record<number, string> = {};
   for (const id in pots.value) potBySlot[pots.value[id].slot] = id;
   const totalInv = Object.values(inventory).reduce((a, b) => a + b, 0);
+  // Owned per species (Album rows): unplaced inventory + plants on shelves.
+  const ownedCounts: Record<string, number> = { ...inventory };
+  for (const pot of Object.values(pots.value)) {
+    ownedCounts[pot.speciesId] = (ownedCounts[pot.speciesId] ?? 0) + 1;
+  }
   // presented plant draws on top of everything else
   const potIds = Object.keys(pots.value);
   const orderedIds =
@@ -1219,6 +1228,8 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
         unlocked={unlocked}
         hearts={hearts}
         onUnlock={unlockSpecies}
+        owned={ownedCounts}
+        sold={soldCounts}
         daySummary={daySummary}
         onCloseSummary={() => setDaySummary(null)}
         day={day}

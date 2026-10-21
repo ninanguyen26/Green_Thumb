@@ -92,56 +92,55 @@ export function ShopModal(p: ShopModalProps) {
             {/* right 1/4: notebook page — the hint lives here now */}
             <View style={[styles.noteWrap, { width: stallW * 0.5 }]}>
               <Image source={NOTEBOOK} style={styles.noteBg} resizeMode="stretch" />
-              {cartList.length === 0 ? (
+              {/* {cartList.length === 0 ? (
                 <Text style={styles.noteHint}>
                   {p.totalInv > 0
                     ? "Tap an empty shelf (+) to plant your purchases!"
                     : "Tap a plant's price to add it to your list."}
                 </Text>
-              ) : (
-                <>
-                  <ScrollView style={styles.noteList} showsVerticalScrollIndicator={false}>
-                    {cartList.map((sp) => {
-                      const qty = p.cart[sp.id];
-                      return (
-                        <View key={sp.id} style={styles.noteRow}>
-                          <Text style={styles.noteName}>{sp.name}</Text>
-                          <View style={styles.stepper}>
-                            <TouchableOpacity style={styles.stepBtn} onPress={() => p.onSetCartQty(sp.id, qty - 1)}>
-                              <Text style={styles.stepText}>−</Text>
-                            </TouchableOpacity>
-                            <Text style={styles.qtyText}>{qty}</Text>
-                            <TouchableOpacity style={styles.stepBtn} onPress={() => p.onSetCartQty(sp.id, qty + 1)}>
-                              <Text style={styles.stepText}>+</Text>
-                            </TouchableOpacity>
-                          </View>
-                          <View style={styles.iconRow}>
-                            <CoinIcon width={11} height={11} />
-                            <Text style={styles.notePrice}> {sp.buy * qty}</Text>
-                          </View>
+              ) : ( */}
+              <>
+                <ScrollView style={styles.noteList} showsVerticalScrollIndicator={false}>
+                  {cartList.map((sp) => {
+                    const qty = p.cart[sp.id];
+                    return (
+                      <View key={sp.id} style={styles.noteRow}>
+                        <Text style={styles.noteName}>{sp.name}</Text>
+                        <View style={styles.stepper}>
+                          <TouchableOpacity style={styles.stepBtn} onPress={() => p.onSetCartQty(sp.id, qty - 1)}>
+                            <Text style={styles.stepText}>−</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.qtyText}>{qty}</Text>
+                          <TouchableOpacity style={styles.stepBtn} onPress={() => p.onSetCartQty(sp.id, qty + 1)}>
+                            <Text style={styles.stepText}>+</Text>
+                          </TouchableOpacity>
                         </View>
-                      );
-                    })}
-                  </ScrollView>
-                  <View style={styles.noteFooter}>
-                    <View style={styles.noteTotalRow}>
-                      <Text style={styles.noteTotalLabel}>Total</Text>
-                      <View style={styles.iconRow}>
-                        <CoinIcon width={12} height={12} />
-                        <Text style={styles.noteTotal}> {cartTotal}</Text>
+                        <View style={styles.iconRow}>
+                          <CoinIcon width={11} height={11} />
+                          <Text style={styles.notePrice}> {sp.buy * qty}</Text>
+                        </View>
                       </View>
+                    );
+                  })}
+                </ScrollView>
+                <View style={styles.noteFooter}>
+                  <View style={styles.noteTotalRow}>
+                    <Text style={styles.noteTotalLabel}>Total</Text>
+                    <View style={styles.iconRow}>
+                      <CoinIcon width={12} height={12} />
+                      <Text style={styles.noteTotal}> {cartTotal}</Text>
                     </View>
-                    {cartTotal > p.coins && <Text style={styles.noteShort}>Need {cartTotal - p.coins} more</Text>}
-                    <TouchableOpacity
-                      style={[styles.noteBuyBtn, cartTotal > p.coins && styles.disabledBtn]}
-                      onPress={p.onBuyCart}
-                      disabled={cartTotal > p.coins}
-                    >
-                      <Text style={styles.noteBuyText}>Buy</Text>
-                    </TouchableOpacity>
                   </View>
-                </>
-              )}
+                  {cartTotal > p.coins && <Text style={styles.noteShort}>Need {cartTotal - p.coins} more</Text>}
+                  <TouchableOpacity
+                    style={[styles.noteBuyBtn, cartTotal > p.coins && styles.disabledBtn]}
+                    onPress={p.onBuyCart}
+                    disabled={cartTotal > p.coins}
+                  >
+                    <Text style={styles.noteBuyText}>Buy</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
             </View>
           </View>
           {/* close sits at the home-icon spot (screen top-right) */}

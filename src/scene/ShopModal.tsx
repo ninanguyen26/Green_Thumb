@@ -10,7 +10,7 @@ import CloseIcon from "../../assets/icons/close-button.svg";
 // plant grid can scroll.
 
 const SHOP_BG = require("../../assets/background/shop-modal-oatmeal-linen.png");
-const PLANK = require("../../assets/interior/shelves/shop-shelf-plank.png");
+const PLANK = require("../../assets/background/plank.png");
 const NOTEBOOK = require("../../assets/background/ring-notebook-page.png");
 
 export interface ShopModalProps {

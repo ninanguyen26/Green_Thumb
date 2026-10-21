@@ -1,15 +1,23 @@
-import { theme } from "../theme";
-import { RoundedRect } from "@shopify/react-native-skia";
+import { Image as SkImage, useImage } from "@shopify/react-native-skia";
 import { shelfById } from "../data/shelves";
 
-// PLACEHOLDER shelf art — Ngoc to replace with sprites (same deal as the
-// watering can). x = left edge, baseY = base line, sc = H/390 scale.
-// Drawn in shelf-local space: the shelf body spans y in [baseY-height, baseY].
-
-const WOOD = theme.art.wood;
-const WOOD_DARK = theme.art.woodDark;
-const WOOD_LIGHT = theme.art.woodLight;
-const BACK = theme.art.woodBack;
+// Shelf furniture art (Ngoc's sprites, per-zone). x = left edge, baseY =
+// base line, sc = H/390 scale. The def's width/height ARE the art's box:
+// the image is drawn with fit="fill" into [x, baseY-h, w, h] so the def's
+// slot coords (same box space) land on the drawn surfaces.
+// Exported for the Design modal's RN <Image> thumbnails (same sources).
+export const SHELF_ART: Record<string, number> = {
+  "window-1": require("../../assets/interior/shelves/window_1.png"),
+  "leftwall-1": require("../../assets/interior/shelves/leftwall_1.png"),
+  "leftwall-2": require("../../assets/interior/shelves/leftwall_2.png"),
+  "rightwall-1": require("../../assets/interior/shelves/rightwall_1.png"),
+  "rightwall-2": require("../../assets/interior/shelves/rightwall_2.png"),
+  "rightwall-3": require("../../assets/interior/shelves/rightwall_3.png"),
+  "showcase-1": require("../../assets/interior/shelves/showcase_1.png"),
+  "showcase-2": require("../../assets/interior/shelves/showcase_2.png"),
+  "showcase-3": require("../../assets/interior/shelves/showcase_3.png"),
+  "showcase-4": require("../../assets/interior/shelves/showcase_4.png"),
+};
 
 export function ShelfSprite({
   defId,
@@ -25,52 +33,9 @@ export function ShelfSprite({
   opacity?: number;
 }) {
   const def = shelfById(defId);
+  const img = useImage(SHELF_ART[defId]);
+  if (!img) return null;
   const w = def.width * sc;
   const h = def.height * sc;
-  const top = baseY - h;
-
-  if (defId === "ledge") {
-    return (
-      <>
-        <RoundedRect x={x} y={top} width={w} height={h} r={4 * sc} color={WOOD} opacity={opacity} />
-        <RoundedRect x={x} y={top} width={w} height={5 * sc} r={3 * sc} color={WOOD_LIGHT} opacity={opacity} />
-        {/* brackets */}
-        <RoundedRect x={x + 18 * sc} y={baseY} width={9 * sc} height={12 * sc} r={3 * sc} color={WOOD_DARK} opacity={opacity} />
-        <RoundedRect x={x + w - 27 * sc} y={baseY} width={9 * sc} height={12 * sc} r={3 * sc} color={WOOD_DARK} opacity={opacity} />
-      </>
-    );
-  }
-
-  if (defId === "bookcase") {
-    // tier boards sit just under each slot row (slots at dy -32 / -92 / -152)
-    const boards = [-32, -92, -152];
-    return (
-      <>
-        <RoundedRect x={x} y={top} width={w} height={h} r={6 * sc} color={BACK} opacity={opacity} />
-        <RoundedRect x={x} y={top} width={7 * sc} height={h} color={WOOD} opacity={opacity} />
-        <RoundedRect x={x + w - 7 * sc} y={top} width={7 * sc} height={h} color={WOOD} opacity={opacity} />
-        <RoundedRect x={x} y={top} width={w} height={8 * sc} color={WOOD} opacity={opacity} />
-        {boards.map((dy) => (
-          <RoundedRect
-            key={dy}
-            x={x + 4 * sc}
-            y={baseY + (dy + 6) * sc}
-            width={w - 8 * sc}
-            height={8 * sc}
-            color={WOOD_LIGHT}
-            opacity={opacity}
-          />
-        ))}
-      </>
-    );
-  }
-
-  // display stand (checkout)
-  return (
-    <>
-      <RoundedRect x={x - 6 * sc} y={top} width={w + 12 * sc} height={12 * sc} r={4 * sc} color={WOOD_LIGHT} opacity={opacity} />
-      <RoundedRect x={x + w / 2 - 15 * sc} y={top + 12 * sc} width={30 * sc} height={h - 24 * sc} color={WOOD} opacity={opacity} />
-      <RoundedRect x={x + w / 2 - 32 * sc} y={baseY - 12 * sc} width={64 * sc} height={12 * sc} r={4 * sc} color={WOOD_DARK} opacity={opacity} />
-    </>
-  );
+  return <SkImage image={img} x={x} y={baseY - h} width={w} height={h} fit="fill" opacity={opacity} />;
 }

@@ -221,7 +221,7 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
   const [zoneShelves, setZoneShelves] = useState<Record<string, PlacedShelf | null>>(() =>
     Object.fromEntries(ZONES.map((z) => [z.id, null]))
   );
-  const [shelfStorage, setShelfStorage] = useState<string[]>(["ledge"]); // one spare to learn with
+  const [shelfStorage, setShelfStorage] = useState<string[]>(["showcase-3"]); // one spare to learn with
   const [shelfPanelOpen, setShelfPanelOpen] = useState(false);
   const [shelfHint, setShelfHint] = useState<string | null>(null);
   const slotIdCounter = useRef(8);
@@ -263,6 +263,9 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
   function buyShelf(defId: string) {
     const def = shelfById(defId);
     if (coins < def.price) return;
+    // no duplicates: a piece is owned once — in storage or placed (Ngoc's rule)
+    if (shelfStorage.includes(defId)) return;
+    if (Object.values(zoneShelves).some((s) => s?.defId === defId)) return;
     setCoins((c) => c - def.price);
     setShelfStorage((prev) => [...prev, defId]);
   }
@@ -793,7 +796,13 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
     const pan = Gesture.Pan()
       .minDistance(24)
       .enabled(!anyModalOpen)
-      .onBegin((e) => {
+      .onStart((e) => {
+          // The grab is claimed HERE, at activation — not onBegin. onBegin
+          // fires on every touch-down, so claiming there let plain taps set
+          // dragId; when the tap then won the Race, the pan was cancelled
+          // (onFinalize only, no onEnd) and dragId stayed stuck, silently
+          // blocking presentPlant ("tap does nothing" until a drag's onEnd
+          // happened to clear it).
           if (anyModalOpen || pausedSv.value) return;
           // don't grab mid-glide (a present/dismiss is in flight)
           if (
@@ -912,6 +921,16 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
           dragId.value = null;
         })
         .onFinalize(() => {
+          // A cancelled pan never runs onEnd — if it had claimed a drag,
+          // release it here and spring the plant home, or dragId stays
+          // stuck and blocks presentPlant. (After a normal onEnd, dragId
+          // is already null and this is a no-op.)
+          if (dragId.value) {
+            dragDX.value = withSpring(0, SPRING);
+            dragDY.value = withSpring(0, SPRING);
+            dragScale.value = withSpring(1, SPRING);
+            dragId.value = null;
+          }
           runOnJS(setDragPid)(null);
         });
 
@@ -1214,7 +1233,6 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
         onCloseDesign={() => setShelfPanelOpen(false)}
         zoneShelves={zoneShelves}
         shelfStorage={shelfStorage}
-        zoneHasPlants={zoneHasPlants}
         onAssignShelf={assignShelfToZone}
         onRemoveShelf={removeShelfFromZone}
         onBuyShelf={buyShelf}

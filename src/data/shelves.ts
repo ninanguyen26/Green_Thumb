@@ -4,13 +4,17 @@
 // buying a shelf and assigning it to a zone is an UPGRADE: it replaces the
 // zone's starter surface and brings more plant slots. No dragging furniture.
 //
+// Shelves are PER-ZONE (Ngoc's art, 2026-10-21): each def belongs to one
+// zone (def.zone) and can only be assigned there. Art lives in
+// assets/interior/shelves/<file>.png, wired in ShelfSprite.tsx.
+//
 // Starter slots carry the ORIGINAL built-in ids (0-7) so Day-1 plants and
 // saved assumptions stay valid. Bought-shelf slots get fresh ids from a
 // counter (8+), never reused.
 //
 // Dimensions are px at a 390pt-tall canvas; the scene scales by H/390.
 // Shelf slots are local (dx from shelf left edge, dy from shelf base line).
-// Ngoc replaces the placeholder art in ShelfSprite.tsx; the data stays.
+// Slot positions are first-pass off the art — tuned on device.
 
 export interface ShelfSlotDef {
   dx: number;
@@ -19,6 +23,7 @@ export interface ShelfSlotDef {
 
 export interface ShelfDef {
   id: string;
+  zone: string; // the zone this shelf belongs to (assignable only there)
   name: string;
   price: number;
   width: number;
@@ -35,44 +40,162 @@ export interface PlacedShelf {
 
 export const SHELF_DEFS: ShelfDef[] = [
   {
-    id: "ledge",
-    name: "Wall Ledge",
-    price: 25,
-    width: 170,
-    height: 14,
+    id: "window-1",
+    zone: "window",
+    name: "Iron Console",
+    price: 30,
+    width: 230,
+    height: 220,
     slots: [
-      { dx: 28, dy: -20 },
-      { dx: 142, dy: -20 },
+      { dx: 69, dy: -191 },
+      { dx: 161, dy: -191 },
     ],
-    blurb: "A simple plank. 2 plants.",
+    blurb: "One wide top. 2 plants.",
   },
   {
-    id: "bookcase",
-    name: "Tall Bookcase",
+    id: "leftwall-1",
+    zone: "left",
+    name: "Mint Step Stand",
     price: 90,
-    width: 200,
-    height: 175,
+    width: 240,
+    height: 230,
     slots: [
-      { dx: 42, dy: -32 },
-      { dx: 158, dy: -32 },
-      { dx: 42, dy: -92 },
-      { dx: 158, dy: -92 },
-      { dx: 42, dy: -152 },
-      { dx: 158, dy: -152 },
+      { dx: 67, dy: -212 },
+      { dx: 173, dy: -212 },
+      { dx: 67, dy: -150 },
+      { dx: 173, dy: -150 },
+      { dx: 67, dy: -92 },
+      { dx: 173, dy: -92 },
     ],
-    blurb: "Three tiers. 6 plants.",
+    blurb: "Three steps. 6 plants.",
   },
   {
-    id: "stand",
-    name: "Display Stand",
-    price: 60,
-    width: 110,
-    height: 115,
+    id: "leftwall-2",
+    zone: "left",
+    name: "Iron Arch Stand",
+    price: 90,
+    width: 250,
+    height: 240,
     slots: [
-      { dx: 32, dy: -120 },
-      { dx: 78, dy: -120 },
+      { dx: 125, dy: -226 },
+      { dx: 33, dy: -134 },
+      { dx: 218, dy: -134 },
+      { dx: 125, dy: -96 },
+      { dx: 38, dy: -50 },
+      { dx: 213, dy: -50 },
     ],
-    blurb: "A pedestal. 2 plants, front and center.",
+    blurb: "Six platforms. 6 plants.",
+  },
+  {
+    id: "rightwall-1",
+    zone: "right",
+    name: "Tall Bookcase",
+    price: 75,
+    width: 150,
+    height: 290,
+    slots: [
+      { dx: 70, dy: -252 },
+      { dx: 70, dy: -197 },
+      { dx: 70, dy: -142 },
+      { dx: 70, dy: -87 },
+      { dx: 70, dy: -32 },
+    ],
+    blurb: "Five boards. 5 plants.",
+  },
+  {
+    id: "rightwall-2",
+    zone: "right",
+    name: "Step Towers",
+    price: 165,
+    width: 280,
+    height: 270,
+    slots: [
+      { dx: 36, dy: -192 },
+      { dx: 106, dy: -219 },
+      { dx: 176, dy: -192 },
+      { dx: 244, dy: -151 },
+      { dx: 36, dy: -146 },
+      { dx: 106, dy: -146 },
+      { dx: 176, dy: -146 },
+      { dx: 36, dy: -57 },
+      { dx: 106, dy: -57 },
+      { dx: 176, dy: -57 },
+      { dx: 244, dy: -57 },
+    ],
+    blurb: "Eleven spots across four towers.",
+  },
+  {
+    id: "rightwall-3",
+    zone: "right",
+    name: "Corner Steps",
+    price: 120,
+    width: 250,
+    height: 240,
+    slots: [
+      { dx: 55, dy: -216 },
+      { dx: 138, dy: -175 },
+      { dx: 213, dy: -139 },
+      { dx: 55, dy: -139 },
+      { dx: 138, dy: -120 },
+      { dx: 55, dy: -41 },
+      { dx: 138, dy: -41 },
+      { dx: 213, dy: -41 },
+    ],
+    blurb: "Eight spots across three towers.",
+  },
+  {
+    id: "showcase-1",
+    zone: "showcase",
+    name: "Bobbin Pedestals",
+    price: 60,
+    width: 210,
+    height: 205,
+    slots: [
+      { dx: 105, dy: -195 },
+      { dx: 151, dy: -152 },
+      { dx: 65, dy: -115 },
+    ],
+    blurb: "Three pedestals. 3 plants.",
+  },
+  {
+    id: "showcase-2",
+    zone: "showcase",
+    name: "Iron Tier Stand",
+    price: 60,
+    width: 150,
+    height: 290,
+    slots: [
+      { dx: 75, dy: -261 },
+      { dx: 75, dy: -162 },
+      { dx: 75, dy: -52 },
+    ],
+    blurb: "Three trays. 3 plants.",
+  },
+  {
+    id: "showcase-3",
+    zone: "showcase",
+    name: "Iron Two-Tier",
+    price: 40,
+    width: 170,
+    height: 240,
+    slots: [
+      { dx: 85, dy: -206 },
+      { dx: 85, dy: -53 },
+    ],
+    blurb: "Two trays. 2 plants.",
+  },
+  {
+    id: "showcase-4",
+    zone: "showcase",
+    name: "Iron Round Table",
+    price: 40,
+    width: 200,
+    height: 190,
+    slots: [
+      { dx: 64, dy: -171 },
+      { dx: 136, dy: -171 },
+    ],
+    blurb: "One round top. 2 plants.",
   },
 ];
 

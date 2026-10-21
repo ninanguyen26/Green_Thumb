@@ -17,6 +17,8 @@ export interface DesignModalProps {
   onCloseDesign: () => void;
   zoneShelves: Record<string, PlacedShelf | null>;
   shelfStorage: string[];
+  zoneHasPlants: (zoneId: string) => boolean;
+  shelfHint: string | null;
   onAssignShelf: (zoneId: string, defId: string) => void;
   onRemoveShelf: (zoneId: string) => void;
   onBuyShelf: (defId: string) => void;
@@ -35,11 +37,13 @@ export function DesignModal(p: DesignModalProps) {
               <Feather name="info" size={13} color={theme.colors.textMuted} />
               <Text style={styles.headerHint}>Shelves can be swapped while a zone is empty.</Text>
             </View>
+            {p.shelfHint ? <Text style={styles.shelfHintText}>{p.shelfHint}</Text> : null}
             <ScrollView style={{ maxHeight: H * 0.72 }} showsVerticalScrollIndicator={false}>
               {ZONES.map((zone) => {
                 const placed = p.zoneShelves[zone.id];
-                const curName = placed ? shelfById(placed.defId).name : zone.starterName;
-                const curSlots = placed ? shelfById(placed.defId).slots.length : zone.starter.length;
+                const occupied = p.zoneHasPlants(zone.id);
+                const curName = placed ? shelfById(placed.defId).name : "Nothing placed";
+                const curSlots = placed ? shelfById(placed.defId).slots.length : 0;
                 return (
                   <View key={zone.id} style={styles.zoneBlock}>
                     <View style={styles.zoneHead}>
@@ -72,12 +76,12 @@ export function DesignModal(p: DesignModalProps) {
                                 {def.name}
                               </Text>
                               {isPlaced ? (
-                                <TouchableOpacity style={[styles.pillBtn, styles.pillBtnMuted]} onPress={() => p.onRemoveShelf(zone.id)}>
-                                  <Text style={[styles.buyText, styles.pillTextMuted]}>Remove</Text>
+                                <TouchableOpacity style={[styles.pillBtn, styles.pillBtnMuted, occupied && styles.disabledBtn]} onPress={() => p.onRemoveShelf(zone.id)} disabled={occupied}>
+                                  <Text style={[styles.buyText, styles.pillTextMuted, occupied && styles.disabledText]}>Remove</Text>
                                 </TouchableOpacity>
                               ) : inStorage ? (
-                                <TouchableOpacity style={[styles.pillBtn, styles.pillBtnAlt]} onPress={() => p.onAssignShelf(zone.id, def.id)}>
-                                  <Text style={[styles.buyText, styles.pillTextAlt]}>{placed ? "Swap" : "Use"}</Text>
+                                <TouchableOpacity style={[styles.pillBtn, styles.pillBtnAlt, occupied && styles.disabledBtn]} onPress={() => p.onAssignShelf(zone.id, def.id)} disabled={occupied}>
+                                  <Text style={[styles.buyText, styles.pillTextAlt, occupied && styles.disabledText]}>{placed ? "Swap" : "Use"}</Text>
                                 </TouchableOpacity>
                               ) : (
                                 <TouchableOpacity
@@ -145,6 +149,7 @@ const styles = StyleSheet.create({
     maxHeight: "100%",
   },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 4 },
+  shelfHintText: { fontSize: 12.5, fontFamily: "Cause_600SemiBold", color: theme.colors.danger, marginBottom: 4 },
   headerHint: { fontSize: 13, fontFamily: "Cause_400Regular", color: theme.colors.textMuted },
   designClose: { position: "absolute", right: 45 },
   rowName: { fontSize: 14, fontFamily: "Cause_600SemiBold", color: theme.colors.text },

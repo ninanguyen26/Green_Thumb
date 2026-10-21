@@ -1,12 +1,6 @@
 // Room is a single background image (assets/background/background.png).
-// Slots are positioned as fractions to match the art:
-// 2 on the window sill, 4 on the floor (right), 2 on the checkout counter (left).
-
-export interface Slot {
-  x: number;
-  y: number;
-  zone: string;
-}
+// Plant slots come only from placed furniture (see data/shelves.ts) —
+// there are no built-in room slots.
 
 export interface RoomLayout {
   counterTop: number; // y of the counter surface in the image
@@ -25,19 +19,3 @@ export function layout(W: number, H: number): RoomLayout {
   };
 }
 
-export function buildSlots(W: number, H: number): Slot[] {
-  const L = layout(W, H);
-  return [
-    // window sill
-    { x: W * 0.36, y: H * 0.37, zone: "sill" },
-    { x: W * 0.5, y: H * 0.37, zone: "sill" },
-    // floor, right side
-    { x: W * 0.6, y: H * 0.84, zone: "floor" },
-    { x: W * 0.72, y: H * 0.84, zone: "floor" },
-    { x: W * 0.83, y: H * 0.84, zone: "floor" },
-    { x: W * 0.93, y: H * 0.84, zone: "floor" },
-    // on the checkout counter (left)
-    { x: W * 0.22, y: H * 0.69, zone: "counter" },
-    { x: W * 0.42, y: H * 0.69, zone: "counter" },
-  ];
-}

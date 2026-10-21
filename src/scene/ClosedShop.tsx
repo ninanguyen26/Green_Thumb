@@ -47,6 +47,8 @@ export interface ClosedModalsProps {
   onCloseDesign: () => void;
   zoneShelves: Record<string, PlacedShelf | null>;
   shelfStorage: string[];
+  zoneHasPlants: (zoneId: string) => boolean;
+  shelfHint: string | null;
   onAssignShelf: (zoneId: string, defId: string) => void;
   onRemoveShelf: (zoneId: string) => void;
   onBuyShelf: (defId: string) => void;
@@ -94,6 +96,8 @@ export function ClosedModals(p: ClosedModalsProps) {
         onCloseDesign={p.onCloseDesign}
         zoneShelves={p.zoneShelves}
         shelfStorage={p.shelfStorage}
+        zoneHasPlants={p.zoneHasPlants}
+        shelfHint={p.shelfHint}
         onAssignShelf={p.onAssignShelf}
         onRemoveShelf={p.onRemoveShelf}
         onBuyShelf={p.onBuyShelf}

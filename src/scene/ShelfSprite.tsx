@@ -2,9 +2,9 @@ import { Image as SkImage, useImage } from "@shopify/react-native-skia";
 import { shelfById } from "../data/shelves";
 
 // Shelf furniture art (Ngoc's sprites, per-zone). x = left edge, baseY =
-// base line, sc = H/390 scale. The def's width/height ARE the art's box:
-// the image is drawn with fit="fill" into [x, baseY-h, w, h] so the def's
-// slot coords (same box space) land on the drawn surfaces.
+// base line, sc = H/390 scale. The art is 1:1, so the def's box is square
+// (width == height): the image is drawn with fit="fill" into [x, baseY-h,
+// w, h] so the def's slot coords (same box space) land on the drawn surfaces.
 // Exported for the Design modal's RN <Image> thumbnails (same sources).
 export const SHELF_ART: Record<string, number> = {
   "window-1": require("../../assets/interior/shelves/window_1.png"),

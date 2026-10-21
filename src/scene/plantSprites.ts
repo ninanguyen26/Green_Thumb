@@ -14,12 +14,12 @@ export interface PlantArt {
 const SHARED_CANVAS = { ax: 0.5, ay: 0.625, aspectRatio: 3 / 4 };
 
 export const PLANT_ART: Record<string, PlantArt> = {
-  pothos: { folder: "golden-pothos", ...SHARED_CANVAS, size: 150 },
-  monstera: { folder: "monstera-deliciosa", ...SHARED_CANVAS, size: 140 },
-  snake: { folder: "snake-plant", ...SHARED_CANVAS, size: 140 },
-  pilea: { folder: "pilea", ...SHARED_CANVAS, size: 135 },
-  fern: { folder: "boston-fern", ...SHARED_CANVAS, size: 150 },
-  aloe: { folder: "aloe-vera", ...SHARED_CANVAS, size: 120 },
+  pothos: { folder: "golden-pothos", ...SHARED_CANVAS, size: 120 },
+  monstera: { folder: "monstera-deliciosa", ...SHARED_CANVAS, size: 112 },
+  snake: { folder: "snake-plant", ...SHARED_CANVAS, size: 112 },
+  pilea: { folder: "pilea", ...SHARED_CANVAS, size: 108 },
+  fern: { folder: "boston-fern", ...SHARED_CANVAS, size: 120 },
+  aloe: { folder: "aloe-vera", ...SHARED_CANVAS, size: 96 },
 };
 
 const SPRITES: Record<string, any> = {

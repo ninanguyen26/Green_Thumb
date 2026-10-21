@@ -12,7 +12,7 @@ import {
   runOnJS,
   type SharedValue,
 } from "react-native-reanimated";
-import { buildSlots, layout, type Slot } from "./zones";
+import { layout } from "./zones";
 import { PotSprite, type PotData } from "./PotSprite";
 import { ParticleLayer, spawnBurst, type Particle } from "./Particles";
 import { CustomerSprite } from "./CustomerSprite";
@@ -23,7 +23,6 @@ import { ShelfSprite } from "./ShelfSprite";
 import {
   shelfById,
   ZONES,
-  zoneById,
   zoneLight,
   type PlacedShelf,
 } from "../data/shelves";
@@ -137,38 +136,10 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
   const presentedIdSv = useSharedValue<string | null>(null);
   const [presentedId, setPresentedId] = useState<string | null>(null);
 
-  // Day 1 starters: 4 mature plants, one per zone. The other 4 slots are
-  // empty so buying/placing is part of the first day.
-  // (Built-in slot positions; the dynamic `slots` is derived later in this
-  // component, so we can't reference it here.)
-  const [initialPots] = useState<Record<string, PotData>>(() => {
-    const builtin = buildSlots(W, H);
-    const starters = [
-      { slot: 0, speciesId: "pothos" },
-      { slot: 2, speciesId: "snake" },
-      { slot: 4, speciesId: "fern" },
-      { slot: 6, speciesId: "pilea" },
-    ];
-    const o: Record<string, PotData> = {};
-    starters.forEach(({ slot, speciesId }, i) => {
-      const id = `p${i + 1}`;
-      o[id] = {
-        id,
-        wx: builtin[slot].x,
-        wy: builtin[slot].y,
-        slot,
-        phase: slot * 1.7,
-        speciesId,
-        water: 1,
-        stage: 2,
-        growth: 0,
-        badLight: 0,
-        pot: "nursery",
-      };
-    });
-    return o;
-  });
-  const pots = useSharedValue(initialPots);
+  // No starter spots and no pre-placed plants (Ngoc 2026-10-21): the shop
+  // starts bare. The Day-1 plants live in the starting inventory (below) —
+  // place furniture first, then put the plants on it.
+  const pots = useSharedValue<Record<string, PotData>>({});
 
   const [coins, setCoins] = useState(100);
   const [hearts, setHearts] = useState(0); // earned from happy customers (stars), spent on Album unlocks
@@ -198,7 +169,8 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
     setPausedBoth(true);
     onHome();
   }
-  const [inventory, setInventory] = useState<Record<string, number>>({});
+  // Day-1 plants start in inventory (they used to sit on starter spots).
+  const [inventory, setInventory] = useState<Record<string, number>>({ pothos: 1, snake: 1, fern: 1, pilea: 1 });
   // lifetime sales per species (the Album's sold stat; session-only for now)
   const [soldCounts, setSoldCounts] = useState<Record<string, number>>({});
   // Shop list (the notebook): staged plants, bought all at once. Lives in
@@ -212,11 +184,10 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
   const [dragPid, setDragPid] = useState<string | null>(null); // mirrors dragId for slot light tinting
 
   // --- Shelves & light zones ---
-  // 4 zones, each with ONE shelf spot. A zone shows its starter surface
-  // (built-in slots, ids 0-7) until a bought shelf is assigned — an upgrade
-  // that swaps in the shelf's own slots. Assigning/removing is only allowed
-  // while the zone is EMPTY (same "clear it first" rule), so a plant never
-  // references a slot that stopped existing.
+  // 4 zones, each with ONE shelf spot. A zone has plant slots ONLY while a
+  // shelf is placed in it (no starter spots). Assigning/removing is only
+  // allowed while the zone is EMPTY (same "clear it first" rule), so a
+  // plant never references a slot that stopped existing.
   const SC = H / 390; // shelf art scale (dims are px @390H)
   const [zoneShelves, setZoneShelves] = useState<Record<string, PlacedShelf | null>>(() =>
     Object.fromEntries(ZONES.map((z) => [z.id, null]))
@@ -224,7 +195,7 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
   const [shelfStorage, setShelfStorage] = useState<string[]>(["showcase-3"]); // one spare to learn with
   const [shelfPanelOpen, setShelfPanelOpen] = useState(false);
   const [shelfHint, setShelfHint] = useState<string | null>(null);
-  const slotIdCounter = useRef(8);
+  const slotIdCounter = useRef(0);
   const slots: SceneSlot[] = useMemo(() => {
     const arr: SceneSlot[] = [];
     for (const zone of ZONES) {
@@ -236,10 +207,6 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
           const id = placed.slotIds[k];
           arr[id] = { x: left + sd.dx * SC, y: H * zone.baseY + sd.dy * SC, zone: zone.id, id, shelfUid: placed.uid };
         });
-      } else {
-        for (const ss of zone.starter) {
-          arr[ss.slotId] = { x: W * ss.x, y: H * ss.y, zone: zone.id, id: ss.slotId, shelfUid: null };
-        }
       }
     }
     return arr;
@@ -250,8 +217,7 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
 
   function zoneSlotIds(zoneId: string): number[] {
     const placed = zoneShelves[zoneId];
-    if (placed) return placed.slotIds;
-    return zoneById(zoneId).starter.map((s) => s.slotId);
+    return placed ? placed.slotIds : [];
   }
   function zoneHasPlants(zoneId: string): boolean {
     return zoneSlotIds(zoneId).some((sid) => potIdInSlotJs(pots.value, sid));
@@ -1233,6 +1199,8 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
         onCloseDesign={() => setShelfPanelOpen(false)}
         zoneShelves={zoneShelves}
         shelfStorage={shelfStorage}
+        zoneHasPlants={zoneHasPlants}
+        shelfHint={shelfHint}
         onAssignShelf={assignShelfToZone}
         onRemoveShelf={removeShelfFromZone}
         onBuyShelf={buyShelf}

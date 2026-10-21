@@ -22,8 +22,8 @@ export function CustomerSprite({
   const upset = useImage(customerSprite(custId, "upset"));
   const img = mood === "happy" ? happy : mood === "upset" ? upset : neutral;
 
-  const S = H * 0.42; // sprite display size
+  const S = H * 0.4; // sprite display size
   const ix = x - S / 2;
-  const iy = headY - S * 0.38; // head center lands on headY
+  const iy = headY - S * 0.215; // head center lands on headY
   return <SkImage image={img} x={ix} y={iy} width={S} height={S} fit="contain" />;
 }

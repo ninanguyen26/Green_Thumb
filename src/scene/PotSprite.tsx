@@ -42,7 +42,7 @@ interface Props {
 
 // The soil mound ends just inside the pot's front rim (whose top is sy - 68*s).
 // Keep this offset tied to the same scale and center as the pot geometry.
-const SOIL_OFFSET = 63;
+const SOIL_OFFSET = 50.4;
 
 interface LeafDef {
   ox: number;
@@ -107,10 +107,10 @@ function PotBack({
   s: SharedValue<number>;
   potColor: SharedValue<string>;
 }) {
-  const bodyX = useDerivedValue(() => sx.value - 32 * s.value);
-  const bodyY = useDerivedValue(() => sy.value - 46 * s.value);
-  const bodyW = useDerivedValue(() => 64 * s.value);
-  const bodyH = useDerivedValue(() => 88 * s.value);
+  const bodyX = useDerivedValue(() => sx.value - 25.6 * s.value);
+  const bodyY = useDerivedValue(() => sy.value - 36.8 * s.value);
+  const bodyW = useDerivedValue(() => 51.2 * s.value);
+  const bodyH = useDerivedValue(() => 70.4 * s.value);
   return <RoundedRect x={bodyX} y={bodyY} width={bodyW} height={bodyH} r={8} color={potColor} />;
 }
 
@@ -125,10 +125,10 @@ function PotRim({
   s: SharedValue<number>;
   potRim: SharedValue<string>;
 }) {
-  const rimX = useDerivedValue(() => sx.value - 37 * s.value);
-  const rimY = useDerivedValue(() => sy.value - 68 * s.value);
-  const rimW = useDerivedValue(() => 74 * s.value);
-  const rimH = useDerivedValue(() => 22 * s.value);
+  const rimX = useDerivedValue(() => sx.value - 29.6 * s.value);
+  const rimY = useDerivedValue(() => sy.value - 54.4 * s.value);
+  const rimW = useDerivedValue(() => 59.2 * s.value);
+  const rimH = useDerivedValue(() => 17.6 * s.value);
   return <RoundedRect x={rimX} y={rimY} width={rimW} height={rimH} r={8} color={potRim} />;
 }
 

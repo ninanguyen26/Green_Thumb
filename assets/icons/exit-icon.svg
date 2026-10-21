@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64" role="img" aria-label="Exit button">
+  <rect x="5" y="6.5" width="54" height="51" rx="14" fill="#F6EBD8" stroke="#59402E" stroke-width="1.8"/>
+  <path d="M10 31 V22 Q10 11 22 11 H42" fill="none" stroke="#FFF9EF" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+  <path d="M15 52 H42 Q54 52 54 41" fill="none" stroke="#DCC8A8" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+  <path d="M32 22 V20 H19 V44 H32 V42" fill="none" stroke="#59402E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M19 20 L26 24 V47 L19 44 Z" fill="#59402E" stroke="#59402E" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M31 32 H47 M40 25 L47 32 L40 39" fill="none" stroke="#59402E" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

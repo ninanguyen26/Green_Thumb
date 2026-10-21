@@ -33,6 +33,11 @@ import CoinIcon from "../../assets/icons/coin-icon.svg";
 import XpIcon from "../../assets/icons/xp-icon.svg";
 import SunIcon from "../../assets/icons/sun-icon.svg";
 import MoonIcon from "../../assets/icons/half-moon-icon.svg";
+import PauseIcon from "../../assets/icons/pause-icon.svg";
+import ResumeIcon from "../../assets/icons/resume-icon.svg";
+import ExitIcon from "../../assets/icons/exit-icon.svg";
+import HomeIcon from "../../assets/icons/home-icon.svg";
+import SettingsIcon from "../../assets/icons/settings-icon.svg";
 import {
   SPECIES,
   speciesById,
@@ -101,7 +106,7 @@ function potIdInSlotJs(potsVal: Record<string, PotData>, slot: number): string |
   return null;
 }
 
-export function ShopScene() {
+export function ShopScene({ active, onHome }: { active: boolean; onHome: () => void }) {
   const { width: W, height: H } = useWindowDimensions();
   const L = layout(W, H);
   const bg = useImage(require("../../assets/background/background.png"));
@@ -176,7 +181,27 @@ export function ShopScene() {
   const [servedCount, setServedCount] = useState(0);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [patience, setPatience] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const [exitConfirm, setExitConfirm] = useState(false);
+  const pausedRef = useRef(false);
+  const pausedSv = useSharedValue(false); // gesture handlers read this (always current)
+  function setPausedBoth(v: boolean) {
+    pausedRef.current = v;
+    pausedSv.value = v;
+    setPaused(v);
+  }
+  useEffect(() => {
+    setPausedBoth(!active);
+  }, [active]);
+
+  function goHome() {
+    setPausedBoth(true);
+    onHome();
+  }
   const [inventory, setInventory] = useState<Record<string, number>>({});
+  // Shop list (the notebook): staged plants, bought all at once. Lives in
+  // scene state so it survives the Shop modal closing.
+  const [cart, setCart] = useState<Record<string, number>>({});
   const [supplierOpen, setSupplierOpen] = useState(false);
   const [slotModal, setSlotModal] = useState<number | null>(null);
   const [placePot, setPlacePot] = useState<PotTier>("nursery");
@@ -269,15 +294,32 @@ export function ShopScene() {
     setShelfStorage((prev) => [...prev, old.defId]);
   }
 
-  const timeouts = useRef<number[]>([]);
+  const pendingActions = useRef(new Set<{ remaining: number; fn: () => void }>());
   const custCount = useRef(0);
   const dayStats = useRef({ coins: 0, happy: 0, angry: 0 });
   const resolvedRef = useRef(false); // customer already served/timed out? blocks double-sale race
-  useEffect(() => () => {
-    timeouts.current.forEach(clearTimeout);
+  // Delayed arrivals/departures keep their remaining time while paused or at home.
+  useEffect(() => {
+    let previous = Date.now();
+    const timer = setInterval(() => {
+      const now = Date.now();
+      const elapsed = now - previous;
+      previous = now;
+      if (pausedRef.current) return;
+      const due: (() => void)[] = [];
+      for (const action of pendingActions.current) {
+        action.remaining -= elapsed;
+        if (action.remaining <= 0) {
+          pendingActions.current.delete(action);
+          due.push(action.fn);
+        }
+      }
+      due.forEach((fn) => fn());
+    }, 50);
+    return () => clearInterval(timer);
   }, []);
   function later(ms: number, fn: () => void) {
-    timeouts.current.push(setTimeout(fn, ms) as unknown as number);
+    pendingActions.current.add({ remaining: ms, fn });
   }
   function setPhaseBoth(p: "open" | "closed") {
     phaseSv.value = p;
@@ -307,6 +349,10 @@ export function ShopScene() {
 
   function spawnCustomer() {
     if (phaseSv.value !== "open") return;
+    if (pausedRef.current) {
+      later(1000, spawnCustomer); // paused: check again in a second
+      return;
+    }
     const ids = Object.values(pots.value).map((p) => p.speciesId);
     if (ids.length === 0) {
       later(5000, spawnCustomer); // empty shop: player should close + restock
@@ -335,6 +381,7 @@ export function ShopScene() {
     custCount.current = 0;
     dayStats.current = { coins: 0, happy: 0, angry: 0 };
     setServedCount(0);
+    setPausedBoth(false);
   }
 
   function openShop() {
@@ -353,20 +400,24 @@ export function ShopScene() {
     endDay(); // early close: current customer just leaves
   }
 
+  // Pause-menu exit: quit the shift (same as the old Close button).
+  function exitShift() {
+    setPausedBoth(false);
+    closeShop();
+  }
+
   function leaveAndNext() {
-    later(1500, () => {
-      customerSv.value = null;
-      setCustomer(null);
-      custCount.current += 1;
-      setServedCount(custCount.current);
-      if (custCount.current >= CUSTOMERS_PER_DAY) {
-        endDay();
-      } else {
-        later(2500, () => {
-          if (phaseSv.value === "open") spawnCustomer();
-        });
-      }
-    });
+    customerSv.value = null;
+    setCustomer(null);
+    custCount.current += 1;
+    setServedCount(custCount.current);
+    if (custCount.current >= CUSTOMERS_PER_DAY) {
+      endDay();
+    } else {
+      later(2500, () => {
+        if (phaseSv.value === "open") spawnCustomer();
+      });
+    }
   }
 
   function handleTimeout() {
@@ -375,7 +426,7 @@ export function ShopScene() {
     customerSv.value = null; // close the serve gate immediately
     dayStats.current.angry += 1;
     setCustomer((c) => (c ? { ...c, mood: "angry", note: "Never mind, I'm leaving." } : c));
-    leaveAndNext();
+    // departure is scheduled by the resolved-customer effect below
   }
 
   function handleSale(plantId: string, stars: number, price: number) {
@@ -402,7 +453,7 @@ export function ShopScene() {
     setTick((t) => t + 1);
     dragDX.value = 0;
     dragDY.value = 0;
-    leaveAndNext();
+    // departure is scheduled by the resolved-customer effect below
   }
 
   function handleRefuse(note: string) {
@@ -435,6 +486,34 @@ export function ShopScene() {
     if (coins < sp.buy) return;
     setCoins((c) => c - sp.buy);
     setInventory((inv) => ({ ...inv, [speciesId]: (inv[speciesId] ?? 0) + 1 }));
+  }
+
+  // The shop price pills stage plants onto the notebook list instead of
+  // buying outright — nothing is spent until buyCart.
+  function addToCart(speciesId: string) {
+    setCart((c) => ({ ...c, [speciesId]: (c[speciesId] ?? 0) + 1 }));
+  }
+
+  function setCartQty(speciesId: string, qty: number) {
+    setCart((c) => {
+      const next = { ...c };
+      if (qty <= 0) delete next[speciesId];
+      else next[speciesId] = qty;
+      return next;
+    });
+  }
+
+  function buyCart() {
+    const entries = Object.entries(cart);
+    const total = entries.reduce((s, [sid, q]) => s + speciesById(sid).buy * q, 0);
+    if (entries.length === 0 || total > coins) return;
+    setCoins((c) => c - total);
+    setInventory((inv) => {
+      const next = { ...inv };
+      for (const [sid, q] of entries) next[sid] = (next[sid] ?? 0) + q;
+      return next;
+    });
+    setCart({});
   }
 
   function placePlant(slot: number, speciesId: string, pot: PotTier) {
@@ -560,6 +639,7 @@ export function ShopScene() {
   // water drain + light-gated growth + bad-light tracking (runs in both phases)
   useEffect(() => {
     const iv = setInterval(() => {
+      if (pausedRef.current) return; // paused: no drain, no growth
       let changed = false;
       const next = { ...pots.value };
       for (const id in next) {
@@ -604,7 +684,7 @@ export function ShopScene() {
 
   // patience drain while a customer waits
   useEffect(() => {
-    if (!customer || customer.mood !== "waiting") return;
+    if (!customer || customer.mood !== "waiting" || paused) return;
     const iv = setInterval(() => {
       setPatience((p) => {
         const np = p - 0.25 / PATIENCE_SEC;
@@ -618,7 +698,18 @@ export function ShopScene() {
     }, 250);
     return () => clearInterval(iv);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customer?.id, customer?.mood]);
+  }, [customer?.id, customer?.mood, paused]);
+
+  // Departure, owned by the customer's resolved STATE rather than a
+  // one-shot timer inside the sale/timeout handlers: a happy/angry customer
+  // always has a leave timer armed, so a timer lost to a hot reload in the
+  // 1.5s window can't leave her standing at the counter forever.
+  useEffect(() => {
+    if (!customer || customer.mood === "waiting" || paused) return;
+    const t = setTimeout(() => leaveAndNext(), 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customer?.id, customer?.mood, paused]);
 
   // Tap = water/manage (dedicated Tap gesture, reliable). Pan = drag to move/serve.
   // Modals render OUTSIDE the GestureDetector; this switch-off is belt-and-
@@ -630,7 +721,7 @@ export function ShopScene() {
       .maxDistance(24)
       .enabled(!anyModalOpen)
       .onEnd((e) => {
-        if (anyModalOpen) return;
+        if (anyModalOpen || pausedSv.value) return;
         // 1. Watering can: toggles the tool. Checked first so it always wins.
         const canPX = W * CAN_POS.x;
         const canPY = H * CAN_POS.y;
@@ -691,7 +782,7 @@ export function ShopScene() {
               best = i;
             }
           }
-          if (best >= 0 && !potIdInSlot(best)) runOnJS(openSlotModal)(best);
+          if (best >= 0 && !potIdInSlot(pots.value, best)) runOnJS(openSlotModal)(best);
         }
       });
 
@@ -699,7 +790,7 @@ export function ShopScene() {
       .minDistance(24)
       .enabled(!anyModalOpen)
       .onBegin((e) => {
-          if (anyModalOpen) return;
+          if (anyModalOpen || pausedSv.value) return;
           // don't grab mid-glide (a present/dismiss is in flight)
           if (
             glideIdSv.value &&
@@ -842,6 +933,8 @@ export function ShopScene() {
   const spriteMood: CustomerMood =
     customer?.mood === "happy" ? "happy" : customer?.mood === "angry" ? "upset" : "neutral";
 
+  if (!active) return null;
+
   return (
     <View style={styles.fill}>
       <GestureDetector gesture={gesture}>
@@ -889,14 +982,8 @@ export function ShopScene() {
           <CustomerBubble W={W} H={H} customer={customer} patience={patience} pipColor={pipColor} />
 
           {/* top bar: phase controls (left), day (center), coins (right) */}
-          {/* top bar: 3 centered pills — day / coins / hearts */}
+          {/* top bar, center: coin pill + heart pill */}
           <View pointerEvents="none" style={[styles.topBar, { top: H * 0.03 }]}>
-            <View style={styles.dayPill}>
-              {phase === "open" ? <SunIcon width={20} height={20} /> : <MoonIcon width={20} height={20} />}
-              <Text style={styles.dayText}>
-                Day {day} • {phase === "open" ? "Open" : "Closed"}
-              </Text>
-            </View>
             <View style={styles.coins}>
               <CoinIcon width={20} height={20} />
               <Text style={styles.coinText}> {coins}</Text>
@@ -912,18 +999,13 @@ export function ShopScene() {
               <Text style={styles.wateringText}>💧 Watering — tap plants, tap the can to put it away</Text>
             </View>
           )}
-          {/* top-left menu: 3 columns of icon buttons (Ngoc's icon art) */}
-          <View style={[styles.menuRow, { top: H * 0.03 }]}>
-            {phase === "closed" ? (
+          {/* bottom-left menu: 3 columns of icon buttons (Ngoc's icon art) */}
+          <View style={[styles.menuRow, { bottom: H * 0.01 }]}>
+            {phase === "closed" && !daySummary && (
               <TouchableOpacity style={styles.menuBtn} onPress={() => setSupplierOpen(true)}>
                 <Image source={require("../../assets/icons/shopping-icon.png")} style={styles.menuIcon} />
                 <Text style={styles.menuLabel}>Shop{totalInv > 0 ? ` (${totalInv})` : ""}</Text>
               </TouchableOpacity>
-            ) : (
-              <View style={styles.customerPill}>
-                <Image source={require("../../assets/icons/happy-face-icon.png")} style={styles.customerIcon} />
-                <Text style={styles.coinText}>{servedCount}/{CUSTOMERS_PER_DAY}</Text>
-              </View>
             )}
             {phase === "closed" && !daySummary && (
               <TouchableOpacity style={styles.menuBtn} onPress={() => setShelfPanelOpen(true)}>
@@ -938,11 +1020,49 @@ export function ShopScene() {
               </TouchableOpacity>
             )}
           </View>
-          {/* close-shop button: upper right corner (open phase only) */}
+          {/* top bar, left: customer pill (open only) + day pill */}
+          <View pointerEvents="none" style={[styles.leftBar, { top: H * 0.03 }]}>
+            <View style={styles.dayPill}>
+              {phase === "open" ? <SunIcon width={20} height={20} /> : <MoonIcon width={20} height={20} />}
+              <Text style={styles.dayText}>
+                Day {day} • {phase === "open" ? "Open" : "Closed"}
+              </Text>
+            </View>
+            {phase === "open" && (
+              <View style={styles.customerPill}>
+                <Image source={require("../../assets/icons/happy-face-icon.png")} style={styles.customerIcon} />
+                <Text style={styles.coinText}>{servedCount}/{CUSTOMERS_PER_DAY}</Text>
+              </View>
+            )}
+          </View>
+          {/* open-phase top-right: pause button. Paused: it becomes resume,
+              with exit / home / settings appearing to its left. */}
           {phase === "open" && (
-            <TouchableOpacity style={[styles.closeCorner, { top: H * 0.03 }]} onPress={closeShop}>
-              <Text style={styles.closeCornerText}>Close</Text>
-            </TouchableOpacity>
+            <View style={[styles.pauseRow, { top: H * 0.03 }]}>
+              {paused && (
+                <>
+                  <TouchableOpacity style={styles.iconBtn} onPress={() => setExitConfirm(true)}>
+                    <ExitIcon width={28} height={28} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.iconBtn} onPress={goHome} accessibilityRole="button" accessibilityLabel="Home">
+                    <HomeIcon width={28} height={28} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.iconBtn}>
+                    <SettingsIcon width={28} height={28} />
+                  </TouchableOpacity>
+                </>
+              )}
+              <TouchableOpacity style={styles.iconBtn} onPress={() => setPausedBoth(!paused)}>
+                {paused ? <ResumeIcon width={28} height={28} /> : <PauseIcon width={28} height={28} />}
+              </TouchableOpacity>
+            </View>
+          )}
+          {phase === "closed" && (
+            <View style={[styles.pauseRow, { top: H * 0.03 }]}>
+              <TouchableOpacity style={styles.iconBtn} onPress={goHome} accessibilityRole="button" accessibilityLabel="Home">
+                <HomeIcon width={28} height={28} />
+              </TouchableOpacity>
+            </View>
           )}
           {/* shelf hint toast (e.g. "Clear the shelf first!") */}
           {shelfHint && (
@@ -977,7 +1097,7 @@ export function ShopScene() {
             );
           })}
 
-          {/* "!" attention markers: red = thirsty, blue = waterlogged */}
+          {/* "!" attention markers: blue = thirsty, dark-blue = waterlogged */}
           {slots.map((s, i) => {
             const pid = potBySlot[i];
             if (!pid || pid === presentedId) return null;
@@ -991,7 +1111,7 @@ export function ShopScene() {
                 pointerEvents="none"
                 style={[
                   styles.alert,
-                  { left: s.x - 13, top: s.y - 178 },
+                  { left: s.x + 31, top: s.y + 33 },
                   waterlogged && { backgroundColor: theme.colors.waterlogged },
                 ]}
               >
@@ -1077,6 +1197,10 @@ export function ShopScene() {
         coins={coins}
         totalInv={totalInv}
         onBuyPlant={buyPlant}
+        cart={cart}
+        onAddToCart={addToCart}
+        onSetCartQty={setCartQty}
+        onBuyCart={buyCart}
         shelfPanelOpen={shelfPanelOpen}
         onCloseDesign={() => setShelfPanelOpen(false)}
         zoneShelves={zoneShelves}
@@ -1100,7 +1224,38 @@ export function ShopScene() {
         day={day}
       />
 
-
+      {/* exit confirm card: rendered LAST so it stacks above the plant
+          name markers (they sit over anything earlier in the tree) */}
+      {exitConfirm && phase === "open" && (
+        <View style={styles.confirmBackdrop}>
+          <View style={[styles.confirmCard, { width: W * 0.52 }]}>
+            <Text style={styles.confirmTitle}>End today's shift?</Text>
+            <Text style={styles.confirmText}>
+              The current customer will leave, and the day ends now. You'll get today's summary and move on to the next day.
+            </Text>
+            <View style={styles.confirmRow}>
+              <TouchableOpacity
+                style={styles.confirmGhost}
+                onPress={() => {
+                  setExitConfirm(false);
+                  setPausedBoth(false);
+                }}
+              >
+                <Text style={styles.confirmGhostText}>Resume</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmPrimary}
+                onPress={() => {
+                  setExitConfirm(false);
+                  exitShift();
+                }}
+              >
+                <Text style={styles.confirmPrimaryText}>Exit</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -1117,6 +1272,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: theme.colors.outline,
     paddingHorizontal: 12,
+    height: 27,
   },
   dayText: { fontSize: 13, fontFamily: "Cause_700Bold", color: theme.colors.text },
   coins: {
@@ -1127,7 +1283,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: theme.colors.outline,
     paddingHorizontal: 12,
-    paddingVertical: 3,
+    height: 27,
   },
   coinText: { fontSize: 13, fontFamily: "Cause_700Bold", color: theme.colors.text },
   supplierBtn: {
@@ -1153,7 +1309,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: theme.colors.danger,
+    backgroundColor: theme.colors.water,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: theme.colors.shadow,
@@ -1161,7 +1317,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  alertText: { fontSize: 16, fontFamily: "Cause_700Bold", color: theme.colors.onDanger },
+  alertText: { fontSize: 16, fontFamily: "Cause_700Bold", color: theme.colors.text },
   sunBadge: {
     position: "absolute",
     width: 26,
@@ -1238,6 +1394,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  leftBar: { position: "absolute", left: 45, flexDirection: "row", alignItems: "center", gap: 8 },
   customerPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -1247,21 +1404,53 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: theme.colors.outline,
     paddingHorizontal: 12,
-    paddingVertical: 3,
+    height: 27,
   },
-  customerIcon: { width: 21, height: 21 },
-  closeCorner: {
+  customerIcon: { width: 20, height: 20 },
+  pauseRow: { position: "absolute", right: 45, flexDirection: "row", alignItems: "center", gap: 8 },
+  // No background/border: Ngoc's SVGs are drawn as complete buttons.
+  iconBtn: { height: 28, width: 36, alignItems: "center", justifyContent: "center" },
+  confirmBackdrop: {
     position: "absolute",
-    right: 20,
-    backgroundColor: theme.colors.surfaceRaised,
-    borderRadius: 12,
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: theme.colors.backdrop,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  confirmCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 18,
     borderWidth: 1.5,
     borderColor: theme.colors.outline,
-    paddingHorizontal: 12,
-    paddingVertical: 3,
+    paddingHorizontal: 22,
+    paddingVertical: 18,
+    alignItems: "center",
   },
-  closeCornerText: { fontSize: 13, fontFamily: "Cause_700Bold", color: theme.colors.text },
-  menuRow: { position: "absolute", left: 20, flexDirection: "row", gap: 5 },
+  confirmTitle: { fontSize: 20, fontFamily: "Cause_700Bold", color: theme.colors.text, marginBottom: 8 },
+  confirmText: { fontSize: 14, color: theme.colors.text, textAlign: "center", lineHeight: 20, marginBottom: 16 },
+  confirmRow: { flexDirection: "row", gap: 10, alignSelf: "stretch" },
+  confirmGhost: {
+    flex: 1,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: theme.colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  confirmGhostText: { fontSize: 15, fontFamily: "Cause_700Bold", color: theme.colors.onPrimary },
+  confirmPrimary: {
+    flex: 1,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: theme.colors.reward,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  confirmPrimaryText: { fontSize: 15, fontFamily: "Cause_700Bold", color: theme.colors.text },
+  menuRow: { position: "absolute", left: 50, flexDirection: "row", gap: 10 },
   menuBtn: {
     alignItems: "center",
     justifyContent: "center",
@@ -1269,5 +1458,5 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   menuIcon: { width: 30, height: 30 },
-  menuLabel: { fontSize: 10, fontFamily: "Cause_700Bold", color: theme.colors.text, marginTop: 1 },
+  menuLabel: { fontSize: 10, fontFamily: "Cause_700Bold", color: theme.colors.text, marginTop: 0.5 },
 });

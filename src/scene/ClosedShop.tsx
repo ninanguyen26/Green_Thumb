@@ -1,27 +1,23 @@
 import { theme } from "../theme";
-import { StyleSheet, View, Text, TouchableOpacity, Pressable, ScrollView, Image } from "react-native";
+import { StyleSheet, View, Text, TouchableOpacity } from "react-native";
 import {
-  SPECIES,
   speciesById,
   POT_TIERS,
   POT_TIER_ORDER,
   WATER_LABEL,
   type PotTier,
 } from "../data/plants";
-import { SHELF_DEFS, shelfById, ZONES, type PlacedShelf } from "../data/shelves";
-import { ALBUM } from "../data/album";
-import { plantSpriteSource } from "./plantSprites";
+import { type PlacedShelf } from "../data/shelves";
 import CoinIcon from "../../assets/icons/coin-icon.svg";
-import XpIcon from "../../assets/icons/xp-icon.svg";
+import { ShopModal } from "./ShopModal";
+import { DesignModal } from "./DesignModal";
+import { AlbumModal } from "./AlbumModal";
 
-// Closed-phase surfaces, split out of ShopScene (2026-10-20): the Open Shop
-// button and all the modals (supplier, design, slot/place, album, day
-// summary). Rendered by ShopScene at the same tree positions as before —
-// modals stay OUTSIDE the GestureDetector so their ScrollViews can scroll.
-
-const SHOP_BG = require("../../assets/background/plant_shop.png");
-const PLANK = require("../../assets/background/plank.png");
-const CLOSE_BTN = require("../../assets/icons/close-button.png");
+// Closed-phase surfaces, split out of ShopScene (2026-10-20) and by modal
+// the same day: Shop -> ShopModal.tsx, Design -> DesignModal.tsx, Album ->
+// AlbumModal.tsx. This file keeps the Open Shop button, the slot/place
+// modal, and the day summary, and forwards props to the three modals.
+// Everything renders OUTSIDE the GestureDetector so ScrollViews can scroll.
 
 export function OpenShopButton({ show, onOpen, top }: { show: boolean; onOpen: () => void; top: number }) {
   if (!show) return null;
@@ -42,6 +38,10 @@ export interface ClosedModalsProps {
   coins: number;
   totalInv: number;
   onBuyPlant: (speciesId: string) => void;
+  cart: Record<string, number>;
+  onAddToCart: (speciesId: string) => void;
+  onSetCartQty: (speciesId: string, qty: number) => void;
+  onBuyCart: () => void;
   // design (shelves)
   shelfPanelOpen: boolean;
   onCloseDesign: () => void;
@@ -73,139 +73,32 @@ export function ClosedModals(p: ClosedModalsProps) {
   const { W, H } = p;
   return (
     <>
-      {/* supplier modal */}
-      {p.supplierOpen && (
-        <View style={styles.backdrop}>
-          <Pressable style={styles.backdropTap} onPress={p.onCloseSupplier} />
-          <View
-            style={[
-              styles.shopCard,
-              { width: Math.min(W * 0.82, H * 1.22), height: Math.min(W * 0.82, H * 1.22) * 0.75 },
-            ]}
-          >
-            <Image source={SHOP_BG} style={styles.shopBg} resizeMode="stretch" />
-            <ScrollView style={styles.shopPanel} showsVerticalScrollIndicator={false}>
-              {Array.from({ length: Math.ceil(SPECIES.length / 5) }, (_, rowIdx) => (
-                <View key={rowIdx} style={styles.plankRow}>
-                  <Image source={PLANK} style={styles.plankImg} resizeMode="stretch" />
-                  <View style={styles.plankCells}>
-                    {SPECIES.slice(rowIdx * 5, rowIdx * 5 + 5).map((sp) => {
-                      const src = plantSpriteSource(sp.id, "sprout-healthy");
-                      const own = p.inventory[sp.id] ?? 0;
-                      return (
-                        <View key={sp.id} style={styles.shopCell2}>
-                          <View style={styles.shopImgWrap2}>
-                            {src ? (
-                              <Image source={src} style={styles.shopImg2} resizeMode="contain" />
-                            ) : (
-                              <Text style={styles.shopEmoji2}>🌱</Text>
-                            )}
-                            {own > 0 && (
-                              <View style={styles.shopBadge}>
-                                <Text style={styles.shopBadgeText}>{own}</Text>
-                              </View>
-                            )}
-                          </View>
-                          <TouchableOpacity
-                            style={[styles.shopBuyBtn, p.coins < sp.buy && styles.disabledBtn]}
-                            onPress={() => p.onBuyPlant(sp.id)}
-                            disabled={p.coins < sp.buy}
-                          >
-                            <View style={styles.iconRow}>
-                              <CoinIcon width={12} height={12} />
-                              <Text style={[styles.buyText, p.coins < sp.buy && styles.disabledText]}> {sp.buy}</Text>
-                            </View>
-                          </TouchableOpacity>
-                        </View>
-                      );
-                    })}
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-            {p.totalInv > 0 && (
-              <Text style={styles.shopHint}>Tap an empty shelf (+) to plant your purchases!</Text>
-            )}
-            <TouchableOpacity style={styles.shopClose} onPress={p.onCloseSupplier}>
-              <Image source={CLOSE_BTN} style={styles.shopCloseImg} resizeMode="contain" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {/* shelves panel: one shelf per light zone (an upgrade) */}
-      {p.shelfPanelOpen && (
-        <View style={styles.backdrop}>
-          <View style={[styles.modal, { width: W * 0.72 }]}>
-            <Text style={styles.modalTitle}>🎨 Design</Text>
-            <ScrollView style={{ maxHeight: H * 0.55 }} showsVerticalScrollIndicator={false}>
-              {ZONES.map((zone) => {
-                const placed = p.zoneShelves[zone.id];
-                const curName = placed ? shelfById(placed.defId).name : zone.starterName;
-                const curSlots = placed ? shelfById(placed.defId).slots.length : zone.starter.length;
-                const occupied = p.zoneHasPlants(zone.id);
-                const storageTypes = [...new Set(p.shelfStorage)];
-                return (
-                  <View key={zone.id} style={styles.zoneBlock}>
-                    <Text style={styles.rowName}>
-                      {zone.name} · {zone.lightLabel} · Lv{zone.light}
-                    </Text>
-                    <Text style={styles.rowSub}>
-                      Now: {curName} • {curSlots} spots
-                      {occupied ? " • plants here — move them off to change" : ""}
-                    </Text>
-                    <View style={styles.zoneBtns}>
-                      {storageTypes.map((defId) => (
-                        <TouchableOpacity
-                          key={defId}
-                          style={styles.zoneBtn}
-                          onPress={() => p.onAssignShelf(zone.id, defId)}
-                        >
-                          <Text style={styles.zoneBtnText}>Use {shelfById(defId).name}</Text>
-                        </TouchableOpacity>
-                      ))}
-                      {placed && (
-                        <TouchableOpacity style={styles.zoneBtn} onPress={() => p.onRemoveShelf(zone.id)}>
-                          <Text style={styles.zoneBtnText}>Remove</Text>
-                        </TouchableOpacity>
-                      )}
-                      {storageTypes.length === 0 && !placed && (
-                        <Text style={styles.hint}>Buy a shelf from the supplier to upgrade.</Text>
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
-              <Text style={styles.sectionLabel}>Buy shelves:</Text>
-              {SHELF_DEFS.map((def) => {
-                const inStorage = p.shelfStorage.filter((d) => d === def.id).length;
-                return (
-                  <View key={def.id} style={styles.row}>
-                    <Text style={styles.rowName}>{def.name}</Text>
-                    <Text style={styles.rowSub}>{def.blurb} • </Text>
-                    <CoinIcon width={12} height={12} />
-                    <Text style={styles.rowSub}>
-                      {def.price}
-                      {inStorage > 0 && ` • in storage ${inStorage}`}
-                    </Text>
-                    <TouchableOpacity
-                      style={[styles.buyBtn, p.coins < def.price && styles.disabledBtn]}
-                      onPress={() => p.onBuyShelf(def.id)}
-                      disabled={p.coins < def.price}
-                    >
-                      <Text style={[styles.buyText, p.coins < def.price && styles.disabledText]}>Buy</Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
-            </ScrollView>
-            <TouchableOpacity style={styles.closeBtn} onPress={p.onCloseDesign}>
-              <Text style={styles.closeText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
+      <ShopModal
+        W={W}
+        H={H}
+        supplierOpen={p.supplierOpen}
+        onCloseSupplier={p.onCloseSupplier}
+        inventory={p.inventory}
+        coins={p.coins}
+        totalInv={p.totalInv}
+        cart={p.cart}
+        onAddToCart={p.onAddToCart}
+        onSetCartQty={p.onSetCartQty}
+        onBuyCart={p.onBuyCart}
+      />
+      <DesignModal
+        W={W}
+        H={H}
+        shelfPanelOpen={p.shelfPanelOpen}
+        onCloseDesign={p.onCloseDesign}
+        zoneShelves={p.zoneShelves}
+        shelfStorage={p.shelfStorage}
+        zoneHasPlants={p.zoneHasPlants}
+        onAssignShelf={p.onAssignShelf}
+        onRemoveShelf={p.onRemoveShelf}
+        onBuyShelf={p.onBuyShelf}
+        coins={p.coins}
+      />
       {/* slot modal: plant into an empty slot (tap a "+" while closed) */}
       {p.slotModal !== null && (
         <View style={styles.backdrop}>
@@ -253,51 +146,15 @@ export function ClosedModals(p: ClosedModalsProps) {
           </View>
         </View>
       )}
-
-      {/* album: the collection — hearts unlock, coins buy (in the Shop) */}
-      {p.albumOpen && (
-        <View style={styles.backdrop}>
-          <Pressable style={styles.backdropTap} onPress={p.onCloseAlbum} />
-          <View style={[styles.modal, { width: W * 0.62 }]}>
-            <Text style={styles.modalTitle}>📖 Album</Text>
-            <View style={styles.hintRow}>
-              <Text style={styles.hint}>{ALBUM.filter((a) => p.unlocked[a.slug]).length}/{ALBUM.length} collected · </Text>
-              <XpIcon width={12} height={12} />
-              <Text style={styles.hint}> {p.hearts} — happy customers earn hearts; hearts unlock plants here, coins buy them in the Shop</Text>
-            </View>
-            <ScrollView style={{ maxHeight: H * 0.55 }} showsVerticalScrollIndicator={false}>
-              {ALBUM.map((a) => {
-                const isOpen = !!p.unlocked[a.slug];
-                return (
-                  <View key={a.slug} style={styles.row}>
-                    <View style={[styles.albumDot, isOpen ? styles.albumDotOpen : styles.albumDotLocked]} />
-                    <Text style={styles.rowName}>{a.name}</Text>
-                    <Text style={styles.rowSub}>
-                      {`${a.scientific} • ☀${a.lightMin}–${a.lightMax} • 💧${WATER_LABEL[a.water]}${a.playable ? " • in the Shop" : ""}`}
-                    </Text>
-                    {!isOpen && (
-                      <TouchableOpacity
-                        style={[styles.buyBtn, p.hearts < a.hearts && styles.disabledBtn]}
-                        onPress={() => p.onUnlock(a.slug, a.hearts)}
-                        disabled={p.hearts < a.hearts}
-                      >
-                        <View style={styles.iconRow}>
-                          <XpIcon width={13} height={13} />
-                          <Text style={[styles.buyText, p.hearts < a.hearts && styles.disabledText]}> {a.hearts}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                );
-              })}
-            </ScrollView>
-            <TouchableOpacity style={styles.closeBtn} onPress={p.onCloseAlbum}>
-              <Text style={styles.closeText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
+      <AlbumModal
+        W={W}
+        H={H}
+        albumOpen={p.albumOpen}
+        onCloseAlbum={p.onCloseAlbum}
+        unlocked={p.unlocked}
+        hearts={p.hearts}
+        onUnlock={p.onUnlock}
+      />
       {/* day summary */}
       {p.daySummary && (
         <View style={styles.backdrop}>
@@ -331,7 +188,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  backdropTap: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
   modal: {
     backgroundColor: theme.colors.surface,
     borderRadius: 16,
@@ -354,8 +210,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
   },
-  disabledBtn: { backgroundColor: theme.colors.disabled },
-  disabledText: { color: theme.colors.text },
   buyText: { fontSize: 14, fontFamily: "Cause_700Bold", color: theme.colors.onPrimary },
   closeBtn: {
     marginTop: 12,
@@ -368,56 +222,6 @@ const styles = StyleSheet.create({
   hint: { fontSize: 13, fontFamily: "Cause_400Regular", color: theme.colors.textMuted, marginVertical: 8 },
   sectionLabel: { fontSize: 13, fontFamily: "Cause_700Bold", color: theme.colors.text, marginTop: 10, marginBottom: 6 },
   iconRow: { flexDirection: "row", alignItems: "center" },
-  hintRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "center" },
-  shopCard: {},
-  shopBg: { position: "absolute", left: 0, top: 0, width: "100%", height: "100%" },
-  shopPanel: {
-    position: "absolute",
-    left: "4%",
-    right: "4%",
-    top: "45%",
-    bottom: "9%",
-  },
-  plankRow: { height: 100, justifyContent: "flex-end" },
-  plankImg: { position: "absolute", left: 0, right: 0, bottom: 2, width: "100%", height: 40 },
-  plankCells: { flexDirection: "row", alignItems: "flex-end" },
-  shopCell2: { width: "20%", alignItems: "center" },
-  shopImgWrap2: { width: 46, height: 61 },
-  shopImg2: { width: 46, height: 61 },
-  shopEmoji2: { fontSize: 32, width: 46, height: 61, textAlign: "center" },
-  shopClose: { position: "absolute", top: 4, right: 4 },
-  shopCloseImg: { width: 38, height: 38 },
-  shopHint: {
-    position: "absolute",
-    left: 12,
-    bottom: 12,
-    fontSize: 12,
-    fontFamily: "Cause_400Regular",
-    color: theme.colors.textInverse,
-  },
-  shopBadge: {
-    position: "absolute",
-    top: -4,
-    right: -10,
-    backgroundColor: theme.colors.danger,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 5,
-  },
-  shopBadgeText: { color: theme.colors.onDanger, fontSize: 12, fontFamily: "Cause_700Bold" },
-  shopBuyBtn: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginTop: 4,
-  },
-  albumDot: { width: 30, height: 30, borderRadius: 15, marginRight: 10 },
-  albumDotOpen: { backgroundColor: theme.colors.success },
-  albumDotLocked: { backgroundColor: theme.colors.locked },
   potRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   potChip: {
     borderWidth: 1,
@@ -428,19 +232,6 @@ const styles = StyleSheet.create({
   },
   potChipSel: { backgroundColor: theme.colors.selected, borderColor: theme.colors.selectedBorder },
   potChipText: { fontSize: 12, fontFamily: "Cause_600SemiBold", color: theme.colors.text },
-  zoneBlock: {
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    paddingVertical: 8,
-  },
-  zoneBtns: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-  zoneBtn: {
-    backgroundColor: theme.colors.secondary,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  zoneBtnText: { color: theme.colors.onSecondary, fontFamily: "Cause_700Bold", fontSize: 12 },
   openBtn: {
     position: "absolute",
     alignSelf: "center",

@@ -127,6 +127,12 @@ export function lightGap(sp: Species, zoneLight: number): number {
 
 export const WATER_LABEL: Record<WaterNeed, string> = { low: "low", medium: "med", high: "high" };
 
+// The starter set: the only species unlocked on a fresh game (species
+// gating, decided 2026-10-22). Everything else unlocks in the Album with
+// hearts (or free via a scan, once the scanner lands). Aloe has no Album
+// entry, so this list is the only gate it has.
+export const STARTER_SPECIES: string[] = ["pothos", "monstera", "snake", "pilea", "fern", "aloe"];
+
 export function speciesById(id: string): Species {
   "worklet";
   return SPECIES.find((s) => s.id === id) ?? SPECIES[0];

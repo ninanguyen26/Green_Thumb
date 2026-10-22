@@ -39,6 +39,7 @@ import HomeIcon from "../../assets/icons/home-icon.svg";
 import SettingsIcon from "../../assets/icons/settings-icon.svg";
 import {
   SPECIES,
+  STARTER_SPECIES,
   speciesById,
   matchTraits,
   requestText,
@@ -144,9 +145,21 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
   const [coins, setCoins] = useState(100);
   const [hearts, setHearts] = useState(0); // earned from happy customers (stars), spent on Album unlocks
   const [albumOpen, setAlbumOpen] = useState(false);
+  // Species gate (2026-10-22): a fresh game starts with only the starter
+  // species unlocked; the rest are bought open in the Album with hearts
+  // (or scanned free, once the scanner lands).
   const [unlocked, setUnlocked] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(ALBUM.filter((a) => a.playable).map((a) => [a.slug, true]))
+    Object.fromEntries(
+      ALBUM.filter((a) => a.playable && STARTER_SPECIES.includes(a.playable)).map((a) => [a.slug, true])
+    )
   );
+  // What the Shop may sell: starters + whatever the Album has unlocked.
+  // Locked species do not appear in the Shop grid at all (Ngoc's call).
+  const shopSpecies = useMemo(() => {
+    const open = new Set<string>(STARTER_SPECIES);
+    for (const a of ALBUM) if (a.playable && unlocked[a.slug]) open.add(a.playable);
+    return SPECIES.filter((sp) => open.has(sp.id));
+  }, [unlocked]);
   const [phase, setPhase] = useState<"open" | "closed">("closed");
   const [day, setDay] = useState(1);
   const [servedCount, setServedCount] = useState(0);
@@ -1195,6 +1208,7 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
         onAddToCart={addToCart}
         onSetCartQty={setCartQty}
         onBuyCart={buyCart}
+        shopSpecies={shopSpecies}
         shelfPanelOpen={shelfPanelOpen}
         onCloseDesign={() => setShelfPanelOpen(false)}
         zoneShelves={zoneShelves}

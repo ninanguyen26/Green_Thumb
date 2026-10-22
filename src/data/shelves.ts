@@ -89,22 +89,6 @@ export const SHELF_DEFS: ShelfDef[] = [
     blurb: "Six platforms. 6 plants.",
   },
   {
-    id: "rightwall-1",
-    zone: "right",
-    name: "Tall Bookcase",
-    price: 75,
-    width: 232,
-    height: 232,
-    slots: [
-      { dx: 108, dy: -202 },
-      { dx: 108, dy: -158 },
-      { dx: 108, dy: -114 },
-      { dx: 108, dy: -70 },
-      { dx: 108, dy: -26 },
-    ],
-    blurb: "Five boards. 5 plants.",
-  },
-  {
     id: "rightwall-2",
     zone: "right",
     name: "Step Towers",

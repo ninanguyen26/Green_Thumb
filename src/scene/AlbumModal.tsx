@@ -123,8 +123,10 @@ export function AlbumModal(p: AlbumModalProps) {
                   >
                     <View style={styles.row}>
                       {spriteSrc ? (
-                        <View style={[styles.albumAvatar, !isOpen && styles.albumSpriteLocked]}>
-                          <Image source={spriteSrc} style={styles.albumSprite} resizeMode="contain" />
+                        <View style={styles.albumAvatar}>
+                          {/* locked = silhouette: the sprite tinted solid with
+                              the theme's locked color (species gate, 2026-10-22) */}
+                          <Image source={spriteSrc} style={styles.albumSprite} resizeMode="contain" tintColor={isOpen ? undefined : theme.colors.locked} />
                         </View>
                       ) : (
                         <View style={[styles.albumDot, isOpen ? styles.albumDotOpen : styles.albumDotLocked]} />
@@ -170,13 +172,13 @@ export function AlbumModal(p: AlbumModalProps) {
               {selected ? (
                 <>
                 {selSprite ? (
-                  <View style={[styles.detailAvatar, !selOpen && styles.albumSpriteLocked]}>
-                    <Image source={selSprite} style={styles.detailSprite} resizeMode="contain" />
+                  <View style={styles.detailAvatar}>
+                    <Image source={selSprite} style={styles.detailSprite} resizeMode="contain" tintColor={selOpen ? undefined : theme.colors.locked} />
                   </View>
                 ) : (
                   <View style={[styles.detailDot, selOpen ? styles.albumDotOpen : styles.albumDotLocked]} />
                 )}
-                <Text style={styles.detailName} numberOfLines={1}>{selected.name}</Text>
+                <Text style={styles.detailName}>{selected.name}</Text>
                 <Text style={styles.detailSci}>{selected.scientific}</Text>
                 <View style={styles.detailInfo}>
                   <View style={styles.detailRowView}>
@@ -348,13 +350,10 @@ const styles = StyleSheet.create({
     bottom: "12%"
   },
   detailPageContent: { alignItems: "center", flexGrow: 1 },
+  // invisible container: keeps the sprite's box + centering, draws nothing
   detailAvatar: {
     width: 69,
     height: 69,
-    borderRadius: 52,
-    backgroundColor: theme.colors.surfaceMuted,
-    borderWidth: 1.5,
-    borderColor: theme.colors.outline,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 6,
@@ -368,8 +367,8 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.outline,
     marginTop: 6,
   },
-  detailName: { fontSize: 17, fontFamily: "Cause_700Bold", color: theme.colors.text, marginTop: 10, textAlign: "center" },
-  detailSci: { fontSize: 12, fontFamily: "Cause_400Regular", color: theme.colors.textMuted, marginTop: 2, textAlign: "center" },
+  detailName: { fontSize: 16, fontFamily: "Cause_700Bold", color: theme.colors.text, marginTop: -2, textAlign: "center" },
+  detailSci: { fontSize: 12, fontFamily: "Cause_400Regular", color: theme.colors.textMuted, textAlign: "center" },
   detailInfo: { marginTop: 14, alignSelf: "stretch" },
   detailRowView: { flexDirection: "row", alignItems: "center", paddingVertical: 3 },
   detailRowText: { flex: 1, flexShrink: 1, fontSize: 12, fontFamily: "Cause_600SemiBold", color: theme.colors.text },
@@ -429,5 +428,4 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   albumSprite: { width: 45.5, height: 59.5, top: 3 },
-  albumSpriteLocked: { opacity: 0.35 },
 });

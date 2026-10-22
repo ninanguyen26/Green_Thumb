@@ -426,6 +426,13 @@ const SPRITES: Record<string, any> = {
 
 export const STAGE_NAMES = ['sprout', 'growing', 'mature'] as const;
 
+// Rendered-size ladder by stage (2026-10-22): a plant draws at its
+// species' PLANT_ART size x STAGE_SCALE[stage] — the 2in / 4in / 6in pot
+// sizes as fractions of the 6in mature size (1/3, 2/3, 1). PLANT_ART
+// size IS the mature (6in) size, so nothing ever renders bigger than
+// the shelf-tuned footprint; sprout and growing scale down from it.
+export const STAGE_SCALE: [number, number, number] = [2 / 6, 4 / 6, 1];
+
 export function plantCondition(water: number): 'healthy' | 'thirsty' | 'half-dead' {
   if (water <= 0.02) return 'half-dead';
   if (water < 0.35) return 'thirsty';

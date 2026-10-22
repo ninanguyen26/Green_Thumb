@@ -10,7 +10,6 @@ export const SHELF_ART: Record<string, number> = {
   "window-1": require("../../assets/interior/shelves/window_1.png"),
   "leftwall-1": require("../../assets/interior/shelves/leftwall_1.png"),
   "leftwall-2": require("../../assets/interior/shelves/leftwall_2.png"),
-  "rightwall-1": require("../../assets/interior/shelves/rightwall_1.png"),
   "rightwall-2": require("../../assets/interior/shelves/rightwall_2.png"),
   "rightwall-3": require("../../assets/interior/shelves/rightwall_3.png"),
   "showcase-1": require("../../assets/interior/shelves/showcase_1.png"),

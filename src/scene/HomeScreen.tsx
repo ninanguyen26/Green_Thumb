@@ -168,7 +168,7 @@ export function HomeScreen({ onEnter, returning }: { onEnter: () => void; return
         }}
         style={[styles.enter, { bottom: Math.max(12, height * 0.02) }, buttonMotion]}
       >
-        <Text style={styles.label}>{returning ? "Continue" : "Enter shop"}</Text>
+        <Text style={styles.label}>{returning ? "Continue" : "Enter Shop"}</Text>
       </AnimatedPressable>
     </View>
   );

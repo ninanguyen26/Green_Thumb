@@ -10,7 +10,7 @@ import {
 } from "react-native-reanimated";
 import { RoundedRect, Circle, Image as SkImage, useImage } from "@shopify/react-native-skia";
 import { speciesById, POT_TIERS, BAD_LIGHT_DROOP_S, type PotTier } from "../data/plants";
-import { PLANT_ART, plantSpriteKey, plantSpriteSource } from "./plantSprites";
+import { PLANT_ART, STAGE_SCALE, plantSpriteKey, plantSpriteSource } from "./plantSprites";
 
 export interface PotData {
   id: string;
@@ -202,6 +202,21 @@ export function PotSprite({ id, pots, clock, dragId, dragDX, dragDY, dragScale, 
     },
     []
   );
+  // Sprite stage scale: same spring pattern as gs, driving STAGE_SCALE so
+  // a stage-up grows the sprite smoothly instead of snapping (2026-10-22).
+  const stageTarget = useDerivedValue(() => {
+    const p = pots.value[id];
+    if (!p) return 1;
+    return STAGE_SCALE[p.stage] ?? 1;
+  });
+  const stageS = useSharedValue(pd ? STAGE_SCALE[pd.stage] ?? 1 : 1);
+  useAnimatedReaction(
+    () => stageTarget.value,
+    (v) => {
+      if (v !== stageS.value) stageS.value = withSpring(v, { damping: 13, stiffness: 110 });
+    },
+    []
+  );
   const potColor = useDerivedValue(() => {
     const p = pots.value[id];
     return p ? POT_TIERS[p.pot].color : theme.art.nursery;
@@ -220,14 +235,14 @@ export function PotSprite({ id, pots, clock, dragId, dragDX, dragDY, dragScale, 
   const soilY = useDerivedValue(() => sy.value - SOIL_OFFSET * s.value);
   const curS = useDerivedValue(() => {
     if (!pots.value[id] || !art) return 0;
-    return art.size * s.value;
+    return art.size * s.value * stageS.value;
   });
   const curH = useDerivedValue(() => curS.value / (art ? art.aspectRatio : 1));
   const curX = useDerivedValue(() => soilX.value - (art ? art.ax : 0) * curS.value);
   const curY = useDerivedValue(() => soilY.value - (art ? art.ay : 0) * curH.value);
   const prevS = useDerivedValue(() => {
     if (!pots.value[id] || !art) return 0;
-    return art.size * s.value;
+    return art.size * s.value * stageS.value;
   });
   const prevH = useDerivedValue(() => prevS.value / (art ? art.aspectRatio : 1));
   const prevX = useDerivedValue(() => soilX.value - (art ? art.ax : 0) * prevS.value);

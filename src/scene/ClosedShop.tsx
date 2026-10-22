@@ -1,11 +1,22 @@
+import { useEffect } from "react";
+import { AppState, Pressable, StyleSheet, View, Text, TouchableOpacity } from "react-native";
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { theme } from "../theme";
-import { StyleSheet, View, Text, TouchableOpacity } from "react-native";
 import {
   speciesById,
   POT_TIERS,
   POT_TIER_ORDER,
   WATER_LABEL,
   type PotTier,
+  type Species,
 } from "../data/plants";
 import { type PlacedShelf } from "../data/shelves";
 import CoinIcon from "../../assets/icons/coin-icon.svg";
@@ -19,12 +30,53 @@ import { AlbumModal } from "./AlbumModal";
 // modal, and the day summary, and forwards props to the three modals.
 // Everything renders OUTSIDE the GestureDetector so ScrollViews can scroll.
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+// Same breathing pulse as HomeScreen's Enter Shop button, gentler
+// (2026-10-22): rise 1px instead of 2, swell 1.5% instead of 2.5%,
+// a slower 1.9s cycle instead of 1.5s, and a softer press squash.
 export function OpenShopButton({ show, onOpen, top }: { show: boolean; onOpen: () => void; top: number }) {
+  const pulse = useSharedValue(0);
+  const pressScale = useSharedValue(1);
+  const buttonMotion = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: -1 * pulse.value },
+      { scale: (1 + 0.015 * pulse.value) * pressScale.value },
+    ],
+  }));
+  useEffect(() => {
+    const updateMotion = (active: boolean) => {
+      cancelAnimation(pulse);
+      pulse.value = active
+        ? withRepeat(withTiming(1, { duration: 1900, easing: Easing.inOut(Easing.sin) }), -1, true)
+        : 0;
+    };
+    updateMotion(show && AppState.currentState === "active");
+    const subscription = AppState.addEventListener("change", (state) => {
+      updateMotion(show && state === "active");
+    });
+    return () => {
+      subscription.remove();
+      cancelAnimation(pulse);
+      cancelAnimation(pressScale);
+    };
+  }, [show, pulse, pressScale]);
   if (!show) return null;
   return (
-    <TouchableOpacity style={[styles.openBtn, { top }]} onPress={onOpen}>
-      <Text style={styles.openText}>☀️ Open Shop</Text>
-    </TouchableOpacity>
+    <AnimatedPressable
+      accessibilityRole="button"
+      accessibilityLabel="Open Shop"
+      onPress={onOpen}
+      onPressIn={() => {
+        pressScale.value = withSpring(0.96, { damping: 14, stiffness: 240 });
+      }}
+      onPressOut={() => {
+        pressScale.value = withSpring(1, { damping: 12, stiffness: 240 });
+      }}
+      style={[styles.openBtn, { top }, buttonMotion]}
+    >
+      <Text style={styles.openText}>Open Shop</Text>
+    </AnimatedPressable>
   );
 }
 
@@ -42,6 +94,7 @@ export interface ClosedModalsProps {
   onAddToCart: (speciesId: string) => void;
   onSetCartQty: (speciesId: string, qty: number) => void;
   onBuyCart: () => void;
+  shopSpecies: Species[];
   // design (shelves)
   shelfPanelOpen: boolean;
   onCloseDesign: () => void;
@@ -88,6 +141,7 @@ export function ClosedModals(p: ClosedModalsProps) {
         onAddToCart={p.onAddToCart}
         onSetCartQty={p.onSetCartQty}
         onBuyCart={p.onBuyCart}
+        species={p.shopSpecies}
       />
       <DesignModal
         W={W}
@@ -240,17 +294,25 @@ const styles = StyleSheet.create({
   potChipText: { fontSize: 12, fontFamily: "Cause_600SemiBold", color: theme.colors.text },
   openBtn: {
     position: "absolute",
-    alignSelf: "center",
+    right: 263,
+    marginTop: 50, 
+    minWidth: 158,
+    minHeight: 44,
+    paddingHorizontal: 28,
+    paddingVertical: 8,
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: theme.colors.primary,
-    borderRadius: 16,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+    borderColor: theme.colors.outline,
+    borderWidth: 2,
+    borderRadius: 14,
     shadowColor: theme.colors.shadow,
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  openText: { fontSize: 18, fontFamily: "Cause_700Bold", color: theme.colors.onPrimary },
+  openText: { fontFamily: "Cause_700Bold", fontSize: 18, color: theme.colors.onPrimary },
   openBtn2: {
     backgroundColor: theme.colors.primary,
     borderRadius: 14,

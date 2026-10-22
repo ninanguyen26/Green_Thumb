@@ -1,6 +1,7 @@
 import { theme } from "../theme";
 import { StyleSheet, View, Text, TouchableOpacity, Pressable, ScrollView, Image } from "react-native";
-import { SPECIES } from "../data/plants";
+import { useState } from "react";
+import { POT_TIERS, POT_TIER_ORDER, type Species } from "../data/plants";
 import { plantSpriteSource } from "./plantSprites";
 import CoinIcon from "../../assets/icons/coin-icon.svg";
 import CloseIcon from "../../assets/icons/close-button.svg";
@@ -12,6 +13,15 @@ import CloseIcon from "../../assets/icons/close-button.svg";
 const SHOP_BG = require("../../assets/background/shop-modal-oatmeal-linen.png");
 const PLANK = require("../../assets/background/plank.png");
 const NOTEBOOK = require("../../assets/background/ring-notebook-page.png");
+
+// Plant Care tab catalog (from the fertilizer & soil design, DESIGN.md
+// 2026-10-20 — designed, not built: no prices or mechanics wired yet).
+const CARE_ITEMS = [
+  { name: "Fertilizer", text: "One plant grows +50% faster for its current stage." },
+  { name: "Standard Soil", text: "No change." },
+  { name: "Moisture-retentive Soil", text: "Water drains ~20% slower." },
+  { name: "Gritty Soil", text: "Harder to overwater — the waterlogged line rises." },
+];
 
 export interface ShopModalProps {
   W: number;
@@ -25,6 +35,9 @@ export interface ShopModalProps {
   onAddToCart: (speciesId: string) => void;
   onSetCartQty: (speciesId: string, qty: number) => void;
   onBuyCart: () => void;
+  // Species the shop may sell (starters + Album-unlocked) — locked species
+  // are not shown in the grid at all (species gate, 2026-10-22).
+  species: Species[];
 }
 
 export function ShopModal(p: ShopModalProps) {
@@ -33,8 +46,9 @@ export function ShopModal(p: ShopModalProps) {
   // its natural 2:3 ratio on the right (width = card height x 2/3 = stallW
   // x 0.5), so neither artwork is distorted.
   const stallW = Math.min(W * 0.82, H * 1.22);
-  const cartList = SPECIES.filter((sp) => (p.cart[sp.id] ?? 0) > 0);
+  const cartList = p.species.filter((sp) => (p.cart[sp.id] ?? 0) > 0);
   const cartTotal = cartList.reduce((s, sp) => s + sp.buy * (p.cart[sp.id] ?? 0), 0);
+  const [tab, setTab] = useState<"plants" | "pots" | "care">("plants");
   return (
     <>
       {/* supplier modal */}
@@ -50,12 +64,13 @@ export function ShopModal(p: ShopModalProps) {
             {/* left 3/4: the stall, exactly as before */}
             <View style={{ width: stallW, height: "100%" }}>
             <Image source={SHOP_BG} style={styles.shopBg} resizeMode="stretch" />
+            {tab === "plants" && (
             <ScrollView style={styles.shopPanel} showsVerticalScrollIndicator={false}>
-              {Array.from({ length: Math.ceil(SPECIES.length / 5) }, (_, rowIdx) => (
+              {Array.from({ length: Math.ceil(p.species.length / 5) }, (_, rowIdx) => (
                 <View key={rowIdx} style={styles.plankRow}>
                   <Image source={PLANK} style={styles.plankImg} resizeMode="stretch" />
                   <View style={styles.plankCells}>
-                    {SPECIES.slice(rowIdx * 5, rowIdx * 5 + 5).map((sp) => {
+                    {p.species.slice(rowIdx * 5, rowIdx * 5 + 5).map((sp) => {
                       const src = plantSpriteSource(sp.id, "sprout-healthy");
                       const own = p.inventory[sp.id] ?? 0;
                       return (
@@ -88,6 +103,75 @@ export function ShopModal(p: ShopModalProps) {
                 </View>
               ))}
             </ScrollView>
+            )}
+            {tab === "pots" && (
+            <ScrollView style={styles.shopPanel} showsVerticalScrollIndicator={false}>
+              <View style={styles.plankRow}>
+                <Image source={PLANK} style={styles.plankImg} resizeMode="stretch" />
+                <View style={styles.plankCells}>
+                  {POT_TIER_ORDER.map((t) => {
+                    const tier = POT_TIERS[t];
+                    return (
+                      <View key={t} style={styles.potCell}>
+                        <View style={styles.potDraw}>
+                          <View style={[styles.potRimDraw, { backgroundColor: tier.rim }]} />
+                          <View style={[styles.potBodyDraw, { backgroundColor: tier.color }]} />
+                        </View>
+                        <Text style={styles.potName}>{tier.name}</Text>
+                        <Text style={styles.potBonus}>
+                          {tier.bonus > 0 ? `+${Math.round(tier.bonus * 100)}% sale price` : "No sale bonus"}
+                        </Text>
+                        <View style={{ marginTop: 3 }}>
+                          {tier.price === 0 ? (
+                            <Text style={styles.potPrice}>Free</Text>
+                          ) : (
+                            <View style={styles.iconRow}>
+                              <CoinIcon width={12} height={12} />
+                              <Text style={styles.potPrice}> {tier.price}</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            </ScrollView>
+            )}
+            {tab === "care" && (
+            <ScrollView style={styles.shopPanel} showsVerticalScrollIndicator={false}>
+              {CARE_ITEMS.map((item) => (
+                <View key={item.name} style={styles.careRow}>
+                  <Text style={styles.careName}>{item.name}</Text>
+                  <Text style={styles.careText}>{item.text}</Text>
+                </View>
+              ))}
+            </ScrollView>
+            )}
+            {/* Plants / Pots tabs: card flaps hanging off the stall's
+                DRAWN bottom rail. The linen artwork's frame ends at
+                95.1% of the box height (measured from the PNG) — the
+                flaps sit on that edge, not the layout box's edge. */}
+            <View style={styles.tabRow}>
+              <TouchableOpacity
+                style={[styles.tabBtn, tab === "plants" ? styles.tabBtnActive : styles.tabBtnInactive]}
+                onPress={() => setTab("plants")}
+              >
+                <Text style={styles.tabText}>Plants</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabBtn, tab === "pots" ? styles.tabBtnActive : styles.tabBtnInactive]}
+                onPress={() => setTab("pots")}
+              >
+                <Text style={styles.tabText}>Pots</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabBtn, tab === "care" ? styles.tabBtnActive : styles.tabBtnInactive]}
+                onPress={() => setTab("care")}
+              >
+                <Text style={styles.tabText}>Plant Care</Text>
+              </TouchableOpacity>
+            </View>
             </View>
             {/* right 1/4: notebook page — the hint lives here now */}
             <View style={[styles.noteWrap, { width: stallW * 0.5 }]}>
@@ -272,4 +356,36 @@ const styles = StyleSheet.create({
     top: "57%",
     bottom: "9%",
   },
+  // Plants / Pots tabs: card flaps — flat paper rectangles hanging off
+  // the stall's bottom edge, no top border so the flap reads as one
+  // piece with the panel; active = bright paper, inactive = muted
+  tabRow: { position: "absolute", left: 32, top: "95.8%", flexDirection: "row", gap: 4 },
+  tabBtn: {
+    width: "auto",
+    height: 27,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    borderWidth: 2,
+    borderColor: theme.colors.outline,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 9,
+    borderBottomRightRadius: 9,
+  },
+  tabBtnActive: { backgroundColor: theme.colors.secondary },
+  tabBtnInactive: { backgroundColor: theme.colors.surfaceMuted },
+  tabText: { fontSize: 14, fontFamily: "Cause_700Bold", color: theme.colors.text },
+  // Pots tab cells: the pot drawn from its tier colors, mirroring the
+  // in-scene pot proportions (rim wider than the body)
+  potCell: { width: "20%", alignItems: "center" },
+  potDraw: { alignItems: "center", marginTop: 2 },
+  potRimDraw: { width: 59, height: 18, borderRadius: 8 },
+  potBodyDraw: { width: 51, height: 44, borderRadius: 8, marginTop: -2 },
+  potName: { fontSize: 12, fontFamily: "Cause_600SemiBold", color: theme.colors.text, marginTop: 6, textAlign: "center" },
+  potBonus: { fontSize: 10.5, fontFamily: "Cause_400Regular", color: theme.colors.textMuted, marginTop: 1, textAlign: "center" },
+  potPrice: { fontSize: 12, fontFamily: "Cause_700Bold", color: theme.colors.text },
+  // Plant Care tab rows: plain catalog lines on the linen
+  careRow: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  careName: { fontSize: 13, fontFamily: "Cause_600SemiBold", color: theme.colors.text },
+  careText: { fontSize: 11.5, fontFamily: "Cause_400Regular", color: theme.colors.textMuted, marginTop: 1 },
 });

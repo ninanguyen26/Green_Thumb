@@ -1,5 +1,12 @@
 import { theme } from "../theme";
-// Starter catalog: species, traits, prices. (Full 71-species seed comes in Step 1 of PROGRESS.md.)
+// Species catalog: the Shop's stockable species — the original 6, the 24
+// database species whose sprite folders landed 2026-10-21/22, and 15
+// cultivars/extra species (wired 2026-10-22). Values from
+// plant-database.json (The Sill, 2026-10-20; cross-checked against Costa
+// Farms 2026-10-22 — DB values kept, Costa's disagreements were tag-level
+// or vague). The 15 additions aren't in the original 41-species DB build;
+// their values come from the 2026-10-22 dual-site audit (The Sill + Costa
+// Farms) and are recorded in plant-database.json + DESIGN.md.
 
 export type TraitKey = "petSafe" | "easyCare" | "lowLight" | "brightLight";
 
@@ -27,6 +34,45 @@ export const SPECIES: Species[] = [
   { id: "pilea", name: "Pilea", leaf: theme.art.leafLight, buy: 15, sell: 30, traits: ["petSafe", "easyCare"], lightMin: 2, lightMax: 4, water: "medium", growth: "fast" },
   { id: "fern", name: "Boston Fern", leaf: theme.art.leaf, buy: 14, sell: 28, traits: ["petSafe", "lowLight"], lightMin: 2, lightMax: 3, water: "medium", growth: "fast" },
   { id: "aloe", name: "Aloe Vera", leaf: theme.art.leafPale, buy: 11, sell: 22, traits: ["easyCare", "brightLight"], lightMin: 3, lightMax: 4, water: "low", growth: "slow" },
+  { id: "african-milk-tree", name: "African Milk Tree", leaf: theme.art.leaf, buy: 14, sell: 28, traits: ["brightLight"], lightMin: 3, lightMax: 4, water: "low", growth: "fast" },
+  { id: "anthurium", name: "Anthurium", leaf: theme.art.leafDark, buy: 18, sell: 36, traits: ["easyCare", "lowLight"], lightMin: 2, lightMax: 3, water: "medium", growth: "mid" },
+  { id: "bird-of-paradise", name: "Bird of Paradise", leaf: theme.art.leaf, buy: 24, sell: 48, traits: ["brightLight"], lightMin: 3, lightMax: 4, water: "medium", growth: "mid" },
+  { id: "birds-nest-fern", name: "Bird's Nest Fern", leaf: theme.art.leafLight, buy: 14, sell: 28, traits: ["petSafe", "easyCare", "lowLight"], lightMin: 1, lightMax: 3, water: "medium", growth: "mid" },
+  { id: "cast-iron-plant", name: "Cast Iron Plant", leaf: theme.art.leafDark, buy: 16, sell: 32, traits: ["petSafe", "lowLight"], lightMin: 1, lightMax: 3, water: "medium", growth: "slow" },
+  { id: "chinese-evergreen", name: "Chinese Evergreen", leaf: theme.art.leafLight, buy: 14, sell: 28, traits: ["easyCare", "lowLight"], lightMin: 1, lightMax: 3, water: "medium", growth: "slow" },
+  { id: "christmas-cactus", name: "Christmas Cactus", leaf: theme.art.leaf, buy: 11, sell: 22, traits: ["petSafe", "easyCare", "lowLight"], lightMin: 2, lightMax: 3, water: "medium", growth: "mid" },
+  { id: "coffee-plant", name: "Coffee Plant", leaf: theme.art.leafDark, buy: 14, sell: 28, traits: ["brightLight"], lightMin: 3, lightMax: 3, water: "medium", growth: "mid" },
+  { id: "croton", name: "Croton", leaf: theme.art.leaf, buy: 14, sell: 28, traits: ["brightLight"], lightMin: 3, lightMax: 4, water: "high", growth: "mid" },
+  { id: "echeveria", name: "Echeveria", leaf: theme.art.leafPale, buy: 9, sell: 18, traits: ["petSafe", "brightLight"], lightMin: 3, lightMax: 4, water: "low", growth: "slow" },
+  { id: "fiddle-leaf-fig", name: "Fiddle Leaf Fig", leaf: theme.art.leafDark, buy: 24, sell: 48, traits: ["brightLight"], lightMin: 3, lightMax: 4, water: "medium", growth: "slow" },
+  { id: "heartleaf-philodendron", name: "Heartleaf Philodendron", leaf: theme.art.leaf, buy: 11, sell: 22, traits: ["easyCare", "lowLight"], lightMin: 1, lightMax: 3, water: "medium", growth: "fast" },
+  { id: "money-tree", name: "Money Tree", leaf: theme.art.leaf, buy: 20, sell: 40, traits: ["petSafe", "easyCare", "lowLight"], lightMin: 2, lightMax: 3, water: "medium", growth: "fast" },
+  { id: "norfolk-island-pine", name: "Norfolk Island Pine", leaf: theme.art.leafDark, buy: 20, sell: 40, traits: ["easyCare", "lowLight"], lightMin: 2, lightMax: 3, water: "medium", growth: "slow" },
+  { id: "olive-tree", name: "Olive Tree", leaf: theme.art.leafPale, buy: 26, sell: 52, traits: ["petSafe", "easyCare", "brightLight"], lightMin: 3, lightMax: 4, water: "high", growth: "slow" },
+  { id: "peace-lily", name: "Peace Lily", leaf: theme.art.leafDark, buy: 13, sell: 26, traits: ["lowLight"], lightMin: 1, lightMax: 3, water: "medium", growth: "mid" },
+  { id: "polka-dot-plant", name: "Polka Dot Plant", leaf: theme.art.leafLight, buy: 9, sell: 18, traits: ["petSafe", "lowLight"], lightMin: 2, lightMax: 3, water: "medium", growth: "fast" },
+  { id: "ponytail-palm", name: "Ponytail Palm", leaf: theme.art.leaf, buy: 22, sell: 44, traits: ["petSafe", "easyCare", "brightLight"], lightMin: 3, lightMax: 4, water: "medium", growth: "slow" },
+  { id: "rubber-plant", name: "Rubber Plant", leaf: theme.art.leafDark, buy: 20, sell: 40, traits: ["easyCare", "lowLight"], lightMin: 2, lightMax: 3, water: "medium", growth: "mid" },
+  { id: "spider-plant", name: "Spider Plant", leaf: theme.art.leafLight, buy: 10, sell: 20, traits: ["petSafe", "easyCare", "lowLight"], lightMin: 2, lightMax: 3, water: "medium", growth: "fast" },
+  { id: "staghorn-fern", name: "Staghorn Fern", leaf: theme.art.leafPale, buy: 18, sell: 36, traits: ["petSafe", "lowLight"], lightMin: 1, lightMax: 3, water: "medium", growth: "slow" },
+  { id: "string-of-pearls", name: "String of Pearls", leaf: theme.art.leaf, buy: 12, sell: 24, traits: ["brightLight"], lightMin: 3, lightMax: 3, water: "medium", growth: "mid" },
+  { id: "stromanthe", name: "Stromanthe Triostar", leaf: theme.art.leaf, buy: 16, sell: 32, traits: ["petSafe", "easyCare", "lowLight"], lightMin: 1, lightMax: 3, water: "medium", growth: "mid" },
+  { id: "zz-plant", name: "ZZ Plant", leaf: theme.art.leafDark, buy: 15, sell: 30, traits: ["easyCare", "lowLight"], lightMin: 1, lightMax: 3, water: "low", growth: "slow" },
+  { id: "fairy-castle-cactus", name: "Fairy Castle Cactus", leaf: theme.art.leaf, buy: 12, sell: 24, traits: ["petSafe", "easyCare", "brightLight"], lightMin: 3, lightMax: 4, water: "low", growth: "slow" },
+  { id: "marble-queen-pothos", name: "Marble Queen Pothos", leaf: theme.art.leafLight, buy: 13, sell: 26, traits: ["easyCare", "lowLight"], lightMin: 1, lightMax: 3, water: "medium", growth: "fast" },
+  { id: "monstera-adansonii", name: "Monstera Adansonii", leaf: theme.art.leaf, buy: 14, sell: 28, traits: ["easyCare", "lowLight"], lightMin: 1, lightMax: 3, water: "medium", growth: "fast" },
+  { id: "monstera-peru", name: "Monstera Peru", leaf: theme.art.leafDark, buy: 20, sell: 40, traits: ["easyCare"], lightMin: 2, lightMax: 3, water: "medium", growth: "mid" },
+  { id: "philodendron-billietiae", name: "Philodendron Billietiae", leaf: theme.art.leaf, buy: 24, sell: 48, traits: [], lightMin: 2, lightMax: 3, water: "medium", growth: "slow" },
+  { id: "philodendron-birkin", name: "Philodendron Birkin", leaf: theme.art.leafDark, buy: 14, sell: 28, traits: ["easyCare"], lightMin: 2, lightMax: 3, water: "medium", growth: "slow" },
+  { id: "philodendron-brasil", name: "Philodendron Brasil", leaf: theme.art.leaf, buy: 14, sell: 28, traits: ["easyCare", "lowLight"], lightMin: 2, lightMax: 3, water: "medium", growth: "fast" },
+  { id: "philodendron-florida-ghost", name: "Philodendron Florida Ghost", leaf: theme.art.leafPale, buy: 26, sell: 52, traits: ["easyCare"], lightMin: 2, lightMax: 3, water: "medium", growth: "slow" },
+  { id: "philodendron-golden-crocodile", name: "Philodendron Golden Crocodile", leaf: theme.art.leafLight, buy: 22, sell: 44, traits: ["easyCare"], lightMin: 2, lightMax: 3, water: "medium", growth: "mid" },
+  { id: "philodendron-micans", name: "Philodendron Micans", leaf: theme.art.leafDark, buy: 15, sell: 30, traits: ["easyCare", "lowLight"], lightMin: 2, lightMax: 3, water: "medium", growth: "fast" },
+  { id: "philodendron-ring-of-fire", name: "Philodendron Ring of Fire", leaf: theme.art.leaf, buy: 24, sell: 48, traits: ["easyCare"], lightMin: 2, lightMax: 3, water: "medium", growth: "slow" },
+  { id: "pothos-cebu-blue", name: "Cebu Blue Pothos", leaf: theme.art.leafPale, buy: 16, sell: 32, traits: ["easyCare", "lowLight"], lightMin: 1, lightMax: 3, water: "medium", growth: "fast" },
+  { id: "pothos-manjula", name: "Manjula Pothos", leaf: theme.art.leafLight, buy: 14, sell: 28, traits: ["easyCare", "lowLight"], lightMin: 1, lightMax: 3, water: "medium", growth: "slow" },
+  { id: "pothos-neon", name: "Neon Pothos", leaf: theme.art.leafLight, buy: 12, sell: 24, traits: ["easyCare", "lowLight"], lightMin: 1, lightMax: 3, water: "medium", growth: "fast" },
+  { id: "pothos-njoy", name: "N'Joy Pothos", leaf: theme.art.leafLight, buy: 15, sell: 30, traits: ["easyCare", "lowLight"], lightMin: 1, lightMax: 3, water: "medium", growth: "mid" },
 ];
 
 // Seconds for a full meter to drain, by water group. (Tuned 2026-10-20:

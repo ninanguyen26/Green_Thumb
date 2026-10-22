@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { AppState, Pressable, StyleSheet, View, Text, TouchableOpacity } from "react-native";
+import { AppState, Image, Pressable, StyleSheet, View, Text, TouchableOpacity } from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
@@ -8,6 +8,7 @@ import Animated, {
   withRepeat,
   withSpring,
   withTiming,
+  type SharedValue,
 } from "react-native-reanimated";
 import { theme } from "../theme";
 import {
@@ -32,24 +33,50 @@ import { AlbumModal } from "./AlbumModal";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-// Same breathing pulse as HomeScreen's Enter Shop button, gentler
-// (2026-10-22): rise 1px instead of 2, swell 1.5% instead of 2.5%,
-// a slower 1.9s cycle instead of 1.5s, and a softer press squash.
-export function OpenShopButton({ show, onOpen, top }: { show: boolean; onOpen: () => void; top: number }) {
-  const pulse = useSharedValue(0);
+const DOOR_SIGN = require("../../assets/background/door-sign.png");
+const DOOR_SIGN_OPEN = require("../../assets/background/door-sign-open.png");
+
+// One hang spot shared by both door signs (CLOSED / OPEN) so the sign
+// never jumps when the phase flips. Ngoc's size/position tuning lives here.
+function signBox(W: number, H: number) {
+  const w = W * 0.12;
+  return { w, h: w * 0.856, x: W * 0.58, y: H * 0.055 };
+}
+
+// Idle motion (2026-10-22): a gentle sway pivoting on the hook, like a
+// real hanging sign; a press still gets the spring squash.
+export function OpenShopButton({ show, onOpen, camX, camY, camZ, W, H }: { show: boolean; onOpen: () => void; camX: SharedValue<number>; camY: SharedValue<number>; camZ: SharedValue<number>; W: number; H: number }) {
+  // Door sign (2026-10-22): replaces the floating pill — a wooden sign
+  // hanging on the door, world-anchored with the same math as the plant
+  // markers (CamLayer in ShopScene) plus a zoom scale, so it pans and
+  // grows with the room instead of floating over it. CLOSED is printed
+  // on the PNG itself. The box comes from signBox() above, shared
+  // with the OPEN sign so the two always hang in the same spot.
+  const sb = signBox(W, H);
+  const sway = useSharedValue(-2.4);
   const pressScale = useSharedValue(1);
-  const buttonMotion = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: -1 * pulse.value },
-      { scale: (1 + 0.015 * pulse.value) * pressScale.value },
-    ],
-  }));
+  const signMotion = useAnimatedStyle(() => {
+    const z = camZ.value;
+    return {
+      width: sb.w * z,
+      height: sb.h * z,
+      transform: [
+        { translateX: camX.value + sb.x * (z - 1) },
+        { translateY: camY.value + sb.y * (z - 1) },
+        { rotate: `${sway.value}deg` },
+        { scale: pressScale.value },
+      ],
+    };
+  });
   useEffect(() => {
     const updateMotion = (active: boolean) => {
-      cancelAnimation(pulse);
-      pulse.value = active
-        ? withRepeat(withTiming(1, { duration: 1900, easing: Easing.inOut(Easing.sin) }), -1, true)
-        : 0;
+      cancelAnimation(sway);
+      if (active) {
+        sway.value = -2.4;
+        sway.value = withRepeat(withTiming(2.4, { duration: 2300, easing: Easing.inOut(Easing.sin) }), -1, true);
+      } else {
+        sway.value = 0;
+      }
     };
     updateMotion(show && AppState.currentState === "active");
     const subscription = AppState.addEventListener("change", (state) => {
@@ -57,10 +84,10 @@ export function OpenShopButton({ show, onOpen, top }: { show: boolean; onOpen: (
     });
     return () => {
       subscription.remove();
-      cancelAnimation(pulse);
+      cancelAnimation(sway);
       cancelAnimation(pressScale);
     };
-  }, [show, pulse, pressScale]);
+  }, [show, sway, pressScale]);
   if (!show) return null;
   return (
     <AnimatedPressable
@@ -73,10 +100,34 @@ export function OpenShopButton({ show, onOpen, top }: { show: boolean; onOpen: (
       onPressOut={() => {
         pressScale.value = withSpring(1, { damping: 12, stiffness: 240 });
       }}
-      style={[styles.openBtn, { top }, buttonMotion]}
+      style={[styles.openBtn, { left: sb.x, top: sb.y, transformOrigin: "50% 5%" }, signMotion]}
     >
-      <Text style={styles.openText}>Open Shop</Text>
+      <Image source={DOOR_SIGN} style={{ width: "100%", height: "100%" }} resizeMode="contain" />
     </AnimatedPressable>
+  );
+}
+
+// OPEN face of the door sign (2026-10-22): same hang spot (signBox),
+// no idle animation and no touch — pure dressing while the shop is open.
+// It still tracks the camera (pan/zoom) so it stays on the door.
+export function OpenDoorSign({ show, camX, camY, camZ, W, H }: { show: boolean; camX: SharedValue<number>; camY: SharedValue<number>; camZ: SharedValue<number>; W: number; H: number }) {
+  const sb = signBox(W, H);
+  const motion = useAnimatedStyle(() => {
+    const z = camZ.value;
+    return {
+      width: sb.w * z,
+      height: sb.h * z,
+      transform: [
+        { translateX: camX.value + sb.x * (z - 1) },
+        { translateY: camY.value + sb.y * (z - 1) },
+      ],
+    };
+  });
+  if (!show) return null;
+  return (
+    <Animated.View pointerEvents="none" style={[styles.openBtn, { left: sb.x, top: sb.y }, motion]}>
+      <Image source={DOOR_SIGN_OPEN} style={{ width: "100%", height: "100%" }} resizeMode="contain" />
+    </Animated.View>
   );
 }
 
@@ -294,23 +345,6 @@ const styles = StyleSheet.create({
   potChipText: { fontSize: 12, fontFamily: "Cause_600SemiBold", color: theme.colors.text },
   openBtn: {
     position: "absolute",
-    right: 263,
-    marginTop: 50, 
-    minWidth: 158,
-    minHeight: 44,
-    paddingHorizontal: 28,
-    paddingVertical: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.outline,
-    borderWidth: 2,
-    borderRadius: 14,
-    shadowColor: theme.colors.shadow,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
   },
   openText: { fontFamily: "Cause_700Bold", fontSize: 18, color: theme.colors.onPrimary },
   openBtn2: {

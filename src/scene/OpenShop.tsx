@@ -64,7 +64,7 @@ export function PresentedPill({
   return (
     <View
       pointerEvents="none"
-      style={[styles.presentPill, { left: W * PRESENT_POS.x - 60, top: H * PRESENT_POS.y + 62, width: 120 }]}
+      style={[styles.presentPill, { left: 0, top: 0, width: 120 }]}
     >
       <Text style={styles.presentText}>
         {speciesById(presentedPlant.speciesId).name}

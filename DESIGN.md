@@ -302,6 +302,10 @@ Right soil for the species = a small edge; wrong soil = a small handicap (drains
   single feature on the list (room switching + per-room state); when built it
   supersedes the "ONE fixed room" line in the light & zones section.
 
+## Camera (built 2026-10-22)
+
+The main room renders zoomed (starts at 1.5×) with a drag pan — Ngoc's call after the fixed whole-room view left plants too small to read, chosen over the parked double-tap zone-focus. Rules: a drag that starts on a plant's visible bounds moves the plant, never pans (the Fallout Shelter lesson); a drag on empty room pans, clamped so the room always covers the screen. Pinch zoom (added later the same day, also Ngoc's call, over a two-stop toggle): 1.0–2.0×, anchored on the world point under the fingers; at 1.0 the whole shop is visible and pan locks. While a pinch owns a touch sequence the pan/drag handlers stand down, and a plant drag in flight when the second finger lands is cancelled home. When a customer arrives and would be off-screen, the camera eases to a counter framing; otherwise it stays where the player left it. All scene interaction converts screen → world at the gesture handlers, so drags/glides/drops behave exactly as before. The watering can sits just off the initial frame (bottom-right) — pan to reach it; if that annoys in play, promote it to the HUD. This supersedes the parked zone-focus idea for the main room; the expansion-rooms section above still describes multi-room navigation as designed (its fetch pattern will need a camera answer when rooms are built).
+
 ## Leafy Corner complaint tracker (researched 2026-10-20 — tackle as we go)
 
 From a full sweep of Leafy Corner's Steam reviews (2,976; theme analysis over all of them + the 100 most-visible read directly) and critic reviews. This is the list Green Thumb is designed against; statuses are where we stand.

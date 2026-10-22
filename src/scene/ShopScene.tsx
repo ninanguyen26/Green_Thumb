@@ -1,10 +1,12 @@
 import { theme } from "../theme";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, View, Text, TouchableOpacity, Image, useWindowDimensions } from "react-native";
-import { Canvas, Image as SkImage, useImage } from "@shopify/react-native-skia";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { StyleSheet, View, Text, TouchableOpacity, Image, useWindowDimensions, type StyleProp, type ViewStyle } from "react-native";
+import { Canvas, Group, Image as SkImage, useImage } from "@shopify/react-native-skia";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import {
+import Animated, {
   Easing,
+  useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
   withRepeat,
   withSpring,
@@ -18,7 +20,7 @@ import { ParticleLayer, spawnBurst, type Particle } from "./Particles";
 import { CustomerSprite } from "./CustomerSprite";
 import { WateringCan } from "./WateringCan";
 import { CustomerBubble, PresentedPill, PRESENT_POS } from "./OpenShop";
-import { OpenShopButton, ClosedModals } from "./ClosedShop";
+import { OpenShopButton, OpenDoorSign, ClosedModals } from "./ClosedShop";
 import { ShelfSprite } from "./ShelfSprite";
 import {
   shelfById,
@@ -75,6 +77,13 @@ const CUSTOMERS_PER_DAY = 20;
 // sits at CAN_POS.
 const CAN_POS = { x: 0.925, y: 0.855 };
 const CAN_R = 58; // tap radius for the can
+// Camera (2026-10-22): the room renders zoomed and pans; pinch zooms
+// between CAM_ZOOM_MIN (the whole shop) and CAM_ZOOM_MAX. CAM_ZOOM is
+// the starting zoom. screen = world * camZ + camOffset; offsets clamp
+// to [W*(1-camZ), 0] x [H*(1-camZ), 0] so the room covers the screen.
+const CAM_ZOOM = 1.5;
+const CAM_ZOOM_MIN = 1;
+const CAM_ZOOM_MAX = 2;
 
 interface Customer {
   id: number;
@@ -104,6 +113,43 @@ function potIdInSlotJs(potsVal: Record<string, PotData>, slot: number): string |
     if (potsVal[id].slot === slot) return id;
   }
   return null;
+}
+
+// An RN overlay anchored to a WORLD point (a plant marker, a badge, the
+// presented pill): positioned at its world left/top, then translated by
+// the camera so it lands where that world point renders on screen.
+// Content itself is NOT scaled — labels stay one readable size.
+function CamLayer({
+  camX,
+  camY,
+  camZ,
+  x,
+  y,
+  style,
+  children,
+}: {
+  camX: SharedValue<number>;
+  camY: SharedValue<number>;
+  camZ: SharedValue<number>;
+  x: number;
+  y: number;
+  style?: StyleProp<ViewStyle>;
+  children: ReactNode;
+}) {
+  const aStyle = useAnimatedStyle(
+    () => ({
+      transform: [
+        { translateX: camX.value + x * (camZ.value - 1) },
+        { translateY: camY.value + y * (camZ.value - 1) },
+      ],
+    }),
+    [x, y]
+  );
+  return (
+    <Animated.View pointerEvents="none" style={[style, { position: "absolute", left: x, top: y }, aStyle]}>
+      {children}
+    </Animated.View>
+  );
 }
 
 export function ShopScene({ active, onHome }: { active: boolean; onHome: () => void }) {
@@ -136,6 +182,38 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
   // The plant currently presented on the counter for serving (open phase).
   const presentedIdSv = useSharedValue<string | null>(null);
   const [presentedId, setPresentedId] = useState<string | null>(null);
+  // Mirror of the glide channel for the label layer: while a plant is
+  // gliding (present/dismiss), its pot is NOT at its anchor — its name
+  // marker and badges hide until it lands, so a label never sits at an
+  // empty slot while the plant is still in the air (glaring when zoomed).
+  const [glidePid, setGlidePid] = useState<string | null>(null);
+  function markGliding(id: string) {
+    setGlidePid(id);
+    setTimeout(() => {
+      setGlidePid((cur) => (cur === id ? null : cur));
+    }, 700);
+  }
+  // Camera state: pan offsets in SCREEN px (see CAM_ZOOM). Starts with the
+  // room centered. camStart* = the offsets when the current pan began.
+  const camX = useSharedValue(-(W * (CAM_ZOOM - 1)) / 2);
+  const camY = useSharedValue(-(H * (CAM_ZOOM - 1)) / 2);
+  const camStartX = useSharedValue(0);
+  const camStartY = useSharedValue(0);
+  const camZ = useSharedValue(CAM_ZOOM);
+  // Pinch bookkeeping: baselines captured when a pinch activates, plus a
+  // flag the pan handlers read so a pinch never fights a plant drag.
+  const pinchingSv = useSharedValue(false);
+  const pinchZ0 = useSharedValue(1);
+  const pinchS0 = useSharedValue(1);
+  const pinchCamX0 = useSharedValue(0);
+  const pinchCamY0 = useSharedValue(0);
+  const pinchFX0 = useSharedValue(0);
+  const pinchFY0 = useSharedValue(0);
+  const camTransform = useDerivedValue(() => [
+    { translateX: camX.value },
+    { translateY: camY.value },
+    { scale: camZ.value },
+  ]);
 
   // No starter spots and no pre-placed plants (Ngoc 2026-10-21): the shop
   // starts bare. The Day-1 plants live in the starting inventory (below) —
@@ -353,6 +431,16 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
       note: null,
     });
     setPatience(1);
+    // Camera: if she would appear off-screen at the current pan, ease to
+    // a counter framing. If she's already visible, the camera stays put.
+    const csx = L.customerX * camZ.value + camX.value;
+    const csy = L.customerHeadY * camZ.value + camY.value;
+    if (csx < W * 0.06 || csx > W * 0.8 || csy < H * 0.12 || csy > H * 0.85) {
+      const tx = Math.min(0, Math.max(W * (1 - camZ.value), W * 0.3 - L.customerX * camZ.value));
+      const ty = Math.min(0, Math.max(H * (1 - camZ.value), H * 0.52 - L.customerHeadY * camZ.value));
+      camX.value = withSpring(tx, { damping: 18, stiffness: 120 });
+      camY.value = withSpring(ty, { damping: 18, stiffness: 120 });
+    }
   }
 
   function endDay() {
@@ -584,6 +672,7 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
       glideDY.value = withSpring(0, SPRING);
       presentedIdSv.value = plantId;
       setPresentedId(plantId);
+      markGliding(plantId);
     };
     if (cur) {
       dismissPresented();
@@ -613,6 +702,7 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
       dragDY.value = 0;
       glideDX.value = withSpring(0, SPRING);
       glideDY.value = withSpring(0, SPRING);
+      markGliding(pid);
     }
     presentedIdSv.value = null;
     setPresentedId(null);
@@ -708,11 +798,14 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
       .enabled(!anyModalOpen)
       .onEnd((e) => {
         if (anyModalOpen || pausedSv.value) return;
+        // Gesture coords arrive in SCREEN px; all scene logic is WORLD.
+        const wx = (e.x - camX.value) / camZ.value;
+        const wy = (e.y - camY.value) / camZ.value;
         // 1. Watering can: toggles the tool. Checked first so it always wins.
         const canPX = W * CAN_POS.x;
         const canPY = H * CAN_POS.y;
-        const cdx = e.x - canPX;
-        const cdy = e.y - canPY;
+        const cdx = wx - canPX;
+        const cdy = wy - canPY;
         if (cdx * cdx + cdy * cdy < CAN_R * CAN_R) {
           const on = !canOnSv.value;
           canOnSv.value = on;
@@ -726,9 +819,9 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
         let hitD = Infinity;
         for (const id in pots.value) {
           const p = pots.value[id];
-          if (e.x > p.wx - 85 && e.x < p.wx + 85 && e.y > p.wy - 200 && e.y < p.wy + 50) {
-            const dx = e.x - p.wx;
-            const dy = e.y - (p.wy - 90);
+          if (wx > p.wx - 85 && wx < p.wx + 85 && wy > p.wy - 200 && wy < p.wy + 50) {
+            const dx = wx - p.wx;
+            const dy = wy - (p.wy - 90);
             const d = dx * dx + dy * dy;
             if (d < hitD) {
               hitD = d;
@@ -739,7 +832,7 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
         // 2. Holding the can: taps water plants.
         if (canOnSv.value) {
           if (hitId) {
-            spawnBurst(parts, clock.value, e.x, e.y, theme.colors.water);
+            spawnBurst(parts, clock.value, wx, wy, theme.colors.water);
             runOnJS(handleWater)(hitId);
           }
           return;
@@ -760,8 +853,8 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
           let bestD = HIT_R * HIT_R;
           for (let i = 0; i < slots.length; i++) {
             if (!slots[i]) continue; // retired shelf slot (gap in the id space)
-            const dx = e.x - slots[i].x;
-            const dy = e.y - slots[i].y;
+            const dx = wx - slots[i].x;
+            const dy = wy - slots[i].y;
             const d = dx * dx + dy * dy;
             if (d < bestD) {
               bestD = d;
@@ -783,24 +876,31 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
           // blocking presentPlant ("tap does nothing" until a drag's onEnd
           // happened to clear it).
           if (anyModalOpen || pausedSv.value) return;
+          if (pinchingSv.value) return; // a pinch owns this touch sequence
           // don't grab mid-glide (a present/dismiss is in flight)
           if (
             glideIdSv.value &&
             (Math.abs(glideDX.value) > 2 || Math.abs(glideDY.value) > 2)
           )
             return;
+          // Camera baseline: if no plant is claimed below, this drag pans
+          // the room (it started on empty space).
+          camStartX.value = camX.value;
+          camStartY.value = camY.value;
+          const wx = (e.x - camX.value) / camZ.value;
+          const wy = (e.y - camY.value) / camZ.value;
           const ps = pots.value;
-          const grabR = phaseSv.value === "open" ? 125 : HIT_R; // presented plant is big
           for (const id in ps) {
             // OPEN: only the presented plant can be dragged (to the customer).
             if (phaseSv.value === "open" && id !== presentedIdSv.value) continue;
-            const dx = e.x - ps[id].wx;
-            const dy = e.y - ps[id].wy;
-            if (dx * dx + dy * dy < grabR * grabR) {
+            // Claim on the plant's VISIBLE bounds (the tap hit-test's box):
+            // a drag that starts on a plant moves the plant — never pans.
+            const p = ps[id];
+            if (wx > p.wx - 85 && wx < p.wx + 85 && wy > p.wy - 200 && wy < p.wy + 50) {
               dragId.value = id;
               runOnJS(setDragPid)(id);
-              grabDX.value = e.x - ps[id].wx;
-              grabDY.value = e.y - ps[id].wy;
+              grabDX.value = wx - p.wx;
+              grabDY.value = wy - p.wy;
               dragDX.value = 0;
               dragDY.value = 0;
               dragScale.value = withSpring(1.18, SPRING);
@@ -809,12 +909,22 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
           }
         })
         .onUpdate((e) => {
+          if (pinchingSv.value) return; // the pinch is driving the camera
           const did = dragId.value;
-          if (!did) return;
+          if (!did) {
+            // No plant claimed: pan the camera. translation is screen px,
+            // which is exactly the camera offsets' unit; clamp so the
+            // zoomed room always covers the screen.
+            camX.value = Math.min(0, Math.max(W * (1 - camZ.value), camStartX.value + e.translationX));
+            camY.value = Math.min(0, Math.max(H * (1 - camZ.value), camStartY.value + e.translationY));
+            return;
+          }
           const p = pots.value[did];
           if (!p) return;
-          dragDX.value = e.x - grabDX.value - p.wx;
-          dragDY.value = e.y - grabDY.value - p.wy;
+          const wx = (e.x - camX.value) / camZ.value;
+          const wy = (e.y - camY.value) / camZ.value;
+          dragDX.value = wx - grabDX.value - p.wx;
+          dragDY.value = wy - grabDY.value - p.wy;
         })
         .onEnd((e) => {
           const did = dragId.value;
@@ -825,14 +935,16 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
             return;
           }
           dragScale.value = withSpring(1, SPRING);
+          const wx = (e.x - camX.value) / camZ.value;
+          const wy = (e.y - camY.value) / camZ.value;
           if (phaseSv.value === "closed") {
             // CLOSED: drag to a slot = move / swap (no serving)
             let best = -1;
             let bestD = SNAP_R * SNAP_R;
             for (let i = 0; i < slots.length; i++) {
               if (!slots[i]) continue; // retired shelf slot
-              const dx = e.x - slots[i].x;
-              const dy = e.y - slots[i].y;
+              const dx = wx - slots[i].x;
+              const dy = wy - slots[i].y;
               const d = dx * dx + dy * dy;
               if (d < bestD) {
                 bestD = d;
@@ -864,7 +976,7 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
           }
           // OPEN: drag to the customer = serve
           const dz = L.dropZone;
-          const inDZ = e.x > dz.x0 && e.x < dz.x1 && e.y > dz.y0 && e.y < dz.y1;
+          const inDZ = wx > dz.x0 && wx < dz.x1 && wy > dz.y0 && wy < dz.y1;
           if (inDZ && customerSv.value) {
             const req = customerSv.value;
             const sid = p.speciesId;
@@ -885,7 +997,7 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
                   (1 + POT_TIERS[p.pot].bonus) *
                   conditionFactor(p.stage, p.water, droop)
               );
-              spawnBurst(parts, clock.value, e.x, e.y - 30);
+              spawnBurst(parts, clock.value, wx, wy - 30);
               runOnJS(handleSale)(did, stars, price);
             } else {
               const note = refuseText(req);
@@ -913,7 +1025,49 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
           runOnJS(setDragPid)(null);
         });
 
-    return Gesture.Race(tap, pan);
+    // Pinch zoom, composed SIMULTANEOUS with the tap/pan race: it only
+    // exists while two fingers are down, and the pan handlers defer to
+    // pinchingSv while it owns a touch sequence.
+    const pinch = Gesture.Pinch()
+      .enabled(!anyModalOpen)
+      .onStart((e) => {
+        if (anyModalOpen || pausedSv.value) return;
+        pinchingSv.value = true;
+        // Baselines: zoom is measured from here, anchored on the world
+        // point under the pinch's focal point (see onUpdate).
+        pinchZ0.value = camZ.value;
+        pinchS0.value = e.scale;
+        pinchCamX0.value = camX.value;
+        pinchCamY0.value = camY.value;
+        pinchFX0.value = e.focalX;
+        pinchFY0.value = e.focalY;
+        // A one-finger drag was in flight when the second finger landed:
+        // release it cleanly (same cleanup as onFinalize) — the pinch
+        // owns the camera now, not the plant.
+        if (dragId.value) {
+          dragDX.value = withSpring(0, SPRING);
+          dragDY.value = withSpring(0, SPRING);
+          dragScale.value = withSpring(1, SPRING);
+          dragId.value = null;
+          runOnJS(setDragPid)(null);
+        }
+      })
+      .onUpdate((e) => {
+        if (!pinchingSv.value) return;
+        // The anchored world point stays under the (moving) focal point:
+        // zoom and two-finger pan in one motion.
+        const awx = (pinchFX0.value - pinchCamX0.value) / pinchZ0.value;
+        const awy = (pinchFY0.value - pinchCamY0.value) / pinchZ0.value;
+        const z = Math.min(CAM_ZOOM_MAX, Math.max(CAM_ZOOM_MIN, pinchZ0.value * (e.scale / pinchS0.value)));
+        camZ.value = z;
+        camX.value = Math.min(0, Math.max(W * (1 - z), e.focalX - awx * z));
+        camY.value = Math.min(0, Math.max(H * (1 - z), e.focalY - awy * z));
+      })
+      .onFinalize(() => {
+        pinchingSv.value = false;
+      });
+
+    return Gesture.Simultaneous(pinch, Gesture.Race(tap, pan));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anyModalOpen, slots]);
 
@@ -947,6 +1101,8 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
       <GestureDetector gesture={gesture}>
         <View style={styles.fill}>
           <Canvas style={styles.fill}>
+            {/* the whole room lives under the camera transform */}
+            <Group transform={camTransform}>
             <SkImage image={phase === "open" ? bg : bgNight} x={0} y={0} width={W} height={H} fit="cover" />
             {/* zone shelves (furniture) — plants sit on their slots above */}
             {ZONES.map((zone) => {
@@ -983,6 +1139,7 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
               />
             ))}
             <ParticleLayer parts={parts} clock={clock} />
+            </Group>
           </Canvas>
 
           {/* dialogue bubble */}
@@ -1002,8 +1159,8 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
           </View>
           {/* watering mode banner: unmistakable, so taps never surprise */}
           {canMode && (
-            <View pointerEvents="none" style={[styles.wateringBanner, { top: H * 0.095 }]}>
-              <Text style={styles.wateringText}>💧 Watering — tap plants, tap the can to put it away</Text>
+            <View pointerEvents="none" style={[styles.wateringBanner, { bottom: H * 0.025 }]}>
+              <Text style={styles.wateringText}>tap plants to water, tap the can to put it away</Text>
             </View>
           )}
           {/* bottom-left menu: 3 columns of icon buttons (Ngoc's icon art) */}
@@ -1049,25 +1206,25 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
               {paused && (
                 <>
                   <TouchableOpacity style={styles.iconBtn} onPress={() => setExitConfirm(true)}>
-                    <ExitIcon width={28} height={28} />
+                    <ExitIcon width={32} height={32} />
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.iconBtn} onPress={goHome} accessibilityRole="button" accessibilityLabel="Home">
-                    <HomeIcon width={28} height={28} />
+                    <HomeIcon width={32} height={32} />
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.iconBtn}>
-                    <SettingsIcon width={28} height={28} />
+                    <SettingsIcon width={32} height={32} />
                   </TouchableOpacity>
                 </>
               )}
               <TouchableOpacity style={styles.iconBtn} onPress={() => setPausedBoth(!paused)}>
-                {paused ? <ResumeIcon width={28} height={28} /> : <PauseIcon width={28} height={28} />}
+                {paused ? <ResumeIcon width={32} height={32} /> : <PauseIcon width={32} height={32} />}
               </TouchableOpacity>
             </View>
           )}
           {phase === "closed" && (
             <View style={[styles.pauseRow, { top: H * 0.03 }]}>
               <TouchableOpacity style={styles.iconBtn} onPress={goHome} accessibilityRole="button" accessibilityLabel="Home">
-                <HomeIcon width={28} height={28} />
+                <HomeIcon width={32} height={32} />
               </TouchableOpacity>
             </View>
           )}
@@ -1078,59 +1235,63 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
             </View>
           )}
 
-          {/* open-shop button (closed phase) */}
-          <OpenShopButton show={phase === "closed" && !daySummary} onOpen={openShop} top={H * 0.12} />
+          {/* door sign (closed phase): hangs on the door, tap to open */}
+          <OpenShopButton show={phase === "closed" && !daySummary} onOpen={openShop} camX={camX} camY={camY} camZ={camZ} W={W} H={H} />
+          {/* OPEN face of the sign while the shop is open (static, no touch) */}
+          <OpenDoorSign show={phase === "open"} camX={camX} camY={camY} camZ={camZ} W={W} H={H} />
 
           {/* shelf name markers */}
           {slots.map((s, i) => {
             const pid = potBySlot[i];
-            if (!pid || pid === presentedId) return null;
+            if (!pid || pid === presentedId || pid === glidePid) return null;
+            const plant = pots.value[pid];
             const tint =
               phase === "closed" && dragSp && pid !== dragPid
                 ? GAP_TINT[lightGap(dragSp, zoneLight(s.zone))]
                 : null;
             return (
-              <View
+              <CamLayer
                 key={i}
-                pointerEvents="none"
-                style={[
-                  styles.marker,
-                  { left: s.x - 44, top: s.y + 46 },
-                  tint ? { borderWidth: 2, borderColor: tint } : null,
-                ]}
+                camX={camX}
+                camY={camY}
+                camZ={camZ}
+                x={plant.wx - 44}
+                y={plant.wy + 46}
+                style={[styles.marker, tint ? { borderWidth: 2, borderColor: tint } : null]}
               >
                 <Text style={styles.markerText}>{speciesById(pots.value[pid].speciesId).name}</Text>
-              </View>
+              </CamLayer>
             );
           })}
 
           {/* "!" attention markers: blue = thirsty, dark-blue = waterlogged */}
           {slots.map((s, i) => {
             const pid = potBySlot[i];
-            if (!pid || pid === presentedId) return null;
+            if (!pid || pid === presentedId || pid === glidePid) return null;
+            const plant = pots.value[pid];
             const w = pots.value[pid]?.water ?? 1;
             const thirsty = w < 0.35;
             const waterlogged = w > 1;
             if (!thirsty && !waterlogged) return null;
             return (
-              <View
+              <CamLayer
                 key={`alert${i}`}
-                pointerEvents="none"
-                style={[
-                  styles.alert,
-                  { left: s.x + 31, top: s.y + 33 },
-                  waterlogged && { backgroundColor: theme.colors.waterlogged },
-                ]}
+                camX={camX}
+                camY={camY}
+                camZ={camZ}
+                x={plant.wx + 31}
+                y={plant.wy + 33}
+                style={[styles.alert, waterlogged && { backgroundColor: theme.colors.waterlogged }]}
               >
                 <Text style={styles.alertText}>!</Text>
-              </View>
+              </CamLayer>
             );
           })}
 
           {/* amber sun badge + hint: growing plant stuck in far-bad light (60s+, closed-phase time) */}
           {slots.map((s, i) => {
             const pid = potBySlot[i];
-            if (!pid || pid === presentedId) return null;
+            if (!pid || pid === presentedId || pid === glidePid) return null;
             const p = pots.value[pid];
             if (!p || p.stage >= 2 || p.badLight < BAD_LIGHT_BADGE_S) return null;
             const sp = speciesById(p.speciesId);
@@ -1138,23 +1299,29 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
             const hint = lvl < sp.lightMin ? "needs more light" : "too much sun";
             return (
               <Fragment key={`sun${i}`}>
-                <View pointerEvents="none" style={[styles.sunBadge, { left: s.x - 43, top: s.y - 178 }]}>
+                <CamLayer camX={camX} camY={camY} camZ={camZ} x={p.wx - 43} y={p.wy - 178} style={styles.sunBadge}>
                   <Text style={styles.sunBadgeText}>☀</Text>
-                </View>
-                <View pointerEvents="none" style={[styles.lightHint, { left: s.x - 55, top: s.y + 68 }]}>
+                </CamLayer>
+                <CamLayer camX={camX} camY={camY} camZ={camZ} x={p.wx - 55} y={p.wy + 68} style={styles.lightHint}>
                   <Text style={styles.lightHintText}>{hint}</Text>
-                </View>
+                </CamLayer>
               </Fragment>
             );
           })}
 
           {/* water gauges (watering mode): every plant shows its level */}
           {canMode &&
-            Object.values(pots.value).map((p) => (
-              <View
+            Object.values(pots.value).map((p) => {
+              if (p.id === glidePid) return null;
+              return (
+              <CamLayer
                 key={`gauge${p.id}`}
-                pointerEvents="none"
-                style={[styles.gauge, { left: p.wx + 42, top: p.wy - 36 }]}
+                camX={camX}
+                camY={camY}
+                camZ={camZ}
+                x={p.wx + 42}
+                y={p.wy - 36}
+                style={styles.gauge}
               >
                 <View
                   style={[
@@ -1163,11 +1330,17 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
                     p.water > 1 ? { backgroundColor: theme.colors.waterlogged } : null,
                   ]}
                 />
-              </View>
-            ))}
+              </CamLayer>
+              );
+            })}
 
-          {/* presented plant: name + stage pill at the spot */}
-          <PresentedPill W={W} H={H} presentedPlant={presentedPlant} />
+          {/* presented plant: name + stage pill at the spot (world-anchored:
+              rides the camera with the presented plant) */}
+          {presentedPlant && (
+            <CamLayer camX={camX} camY={camY} camZ={camZ} x={PRESENT_X - 60} y={PRESENT_Y + 62}>
+              <PresentedPill W={W} H={H} presentedPlant={presentedPlant} />
+            </CamLayer>
+          )}
 
           {/* empty-slot "+" markers (closed phase): tap to plant from inventory */}
           {phase === "closed" &&
@@ -1175,17 +1348,20 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
               if (potBySlot[i]) return null;
               const tint = dragSp ? GAP_TINT[lightGap(dragSp, zoneLight(s.zone))] : null;
               return (
-                <View
+                <CamLayer
                   key={`empty${i}`}
-                  pointerEvents="none"
+                  camX={camX}
+                  camY={camY}
+                  camZ={camZ}
+                  x={s.x - 24}
+                  y={s.y - 24}
                   style={[
                     styles.emptySlot,
-                    { left: s.x - 24, top: s.y - 24 },
                     tint ? { borderColor: tint, backgroundColor: tint + "33" } : null,
                   ]}
                 >
                   <Text style={styles.emptyText}>+</Text>
-                </View>
+                </CamLayer>
               );
             })}
 
@@ -1273,7 +1449,9 @@ export function ShopScene({ active, onHome }: { active: boolean; onHome: () => v
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  topBar: { position: "absolute", alignSelf: "center", flexDirection: "row", gap: 8 },
+  // HUD layer: zIndex 10 on the bars/menu/banner keeps them above every
+  // world overlay (name markers, door sign) regardless of tree order.
+  topBar: { position: "absolute", alignSelf: "center", flexDirection: "row", gap: 8, zIndex: 10 },
   dayPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -1386,11 +1564,14 @@ const styles = StyleSheet.create({
   gaugeFill: { width: 10, backgroundColor: theme.colors.water },
   wateringBanner: {
     position: "absolute",
+    zIndex: 10,
     alignSelf: "center",
-    backgroundColor: theme.colors.utilitySurface,
+    backgroundColor: theme.colors.water,
+    borderWidth: 1,
+    borderColor: theme.colors.waterlogged,
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 3,
   },
   wateringText: { fontSize: 13, fontFamily: "Cause_700Bold", color: theme.colors.onUtility },
   decorateBtn: {
@@ -1405,7 +1586,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  leftBar: { position: "absolute", left: 45, flexDirection: "row", alignItems: "center", gap: 8 },
+  leftBar: { position: "absolute", left: 45, flexDirection: "row", alignItems: "center", gap: 8, zIndex: 10 },
   customerPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -1418,7 +1599,7 @@ const styles = StyleSheet.create({
     height: 27,
   },
   customerIcon: { width: 20, height: 20 },
-  pauseRow: { position: "absolute", right: 45, flexDirection: "row", alignItems: "center", gap: 8 },
+  pauseRow: { position: "absolute", right: 45, flexDirection: "row", alignItems: "center", gap: 5, zIndex: 10 },
   // No background/border: Ngoc's SVGs are drawn as complete buttons.
   iconBtn: { height: 28, width: 36, alignItems: "center", justifyContent: "center" },
   confirmBackdrop: {
@@ -1461,7 +1642,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   confirmPrimaryText: { fontSize: 15, fontFamily: "Cause_700Bold", color: theme.colors.text },
-  menuRow: { position: "absolute", left: 50, flexDirection: "row", gap: 10 },
+  menuRow: { position: "absolute", left: 50, flexDirection: "row", gap: 10, zIndex: 10 },
   menuBtn: {
     alignItems: "center",
     justifyContent: "center",
